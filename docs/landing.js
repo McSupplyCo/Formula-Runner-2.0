@@ -203,16 +203,23 @@
 
   var hero = document.querySelector(".hero");
   if (scene && hero) {
+    // The hero's intersection state does not change while the tab is hidden, so the
+    // observer will not fire on return. Track it and gate the restart on both.
+    var heroVisible = true;
     if ("IntersectionObserver" in window) {
       new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) { e.isIntersecting ? scene.start() : scene.stop(); });
+        entries.forEach(function (e) {
+          heroVisible = e.isIntersecting;
+          heroVisible ? scene.start() : scene.stop();
+        });
       }, { rootMargin: "120px" }).observe(hero);
     } else {
       scene.start();
     }
 
     document.addEventListener("visibilitychange", function () {
-      document.hidden ? scene.stop() : scene.start();
+      if (document.hidden || !heroVisible) scene.stop();
+      else scene.start();
     });
 
     var rt;
