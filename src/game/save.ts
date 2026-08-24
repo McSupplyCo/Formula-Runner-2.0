@@ -1,0 +1,122 @@
+import { CARS, SAVE_KEY, SAVE_VERSION, type CarId } from "./tuning";
+import { clamp } from "./math";
+
+export type SaveData = {
+  version: number;
+  bestScore: number;
+  bestDistance: number;
+  bestCombo: number;
+  selectedCar: CarId;
+  unlockedCars: CarId[];
+  totalRuns: number;
+  totalDistance: number;
+  sfxVolume: number;
+  musicVolume: number;
+  reducedMotion: boolean;
+  haptics: boolean;
+};
+
+export const defaultSave = (): SaveData => ({
+  version: SAVE_VERSION,
+  bestScore: 0,
+  bestDistance: 0,
+  bestCombo: 0,
+  selectedCar: "apex",
+  unlockedCars: ["apex"],
+  totalRuns: 0,
+  totalDistance: 0,
+  sfxVolume: 0.8,
+  musicVolume: 0.45,
+  reducedMotion: false,
+  haptics: true,
+});
+
+export function migrateSave(raw: unknown): SaveData {
+  const base = defaultSave();
+  if (!raw || typeof raw !== "object") return base;
+  const data = raw as Record<string, unknown>;
+
+  // v1 Unity-like fields
+  if (typeof data.bestDistance === "number") base.bestDistance = data.bestDistance;
+  if (typeof data.bestScore === "number") base.bestScore = data.bestScore;
+
+  const version = typeof data.version === "number" ? data.version : 1;
+  const next: SaveData = {
+    ...base,
+    version: SAVE_VERSION,
+    bestScore: num(data.bestScore, base.bestScore),
+    bestDistance: num(data.bestDistance, base.bestDistance),
+    bestCombo: num(data.bestCombo, base.bestCombo),
+    selectedCar: parseCar(data.selectedCar, base.selectedCar),
+    unlockedCars: parseCars(data.unlockedCars, base.unlockedCars),
+    totalRuns: num(data.totalRuns, version < 2 ? 0 : base.totalRuns),
+    totalDistance: num(data.totalDistance, base.totalDistance),
+    sfxVolume: clamp(num(data.sfxVolume, base.sfxVolume), 0, 1),
+    musicVolume: clamp(num(data.musicVolume, base.musicVolume), 0, 1),
+    reducedMotion: bool(data.reducedMotion, base.reducedMotion),
+    haptics: bool(data.haptics, base.haptics),
+  };
+
+  if (!next.unlockedCars.includes("apex")) next.unlockedCars.unshift("apex");
+  if (!next.unlockedCars.includes(next.selectedCar)) next.selectedCar = "apex";
+  return next;
+}
+
+export function applyUnlocks(save: SaveData): SaveData {
+  const unlocked = new Set<CarId>(save.unlockedCars);
+  for (const car of CARS) {
+    if (save.bestDistance >= car.unlockBest) unlocked.add(car.id);
+  }
+  return { ...save, unlockedCars: [...unlocked] };
+}
+
+export function commitRun(
+  save: SaveData,
+  run: { score: number; distance: number; combo: number },
+): SaveData {
+  const next = applyUnlocks({
+    ...save,
+    bestScore: Math.max(save.bestScore, run.score),
+    bestDistance: Math.max(save.bestDistance, run.distance),
+    bestCombo: Math.max(save.bestCombo, run.combo),
+    totalRuns: save.totalRuns + 1,
+    totalDistance: save.totalDistance + run.distance,
+  });
+  return next;
+}
+
+export function loadSave(): SaveData {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    return applyUnlocks(migrateSave(JSON.parse(raw)));
+  } catch {
+    return defaultSave();
+  }
+}
+
+export function writeSave(save: SaveData): void {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...save, version: SAVE_VERSION }));
+  } catch {
+    // Ignore quota / private mode.
+  }
+}
+
+function num(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function bool(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function parseCar(value: unknown, fallback: CarId): CarId {
+  return CARS.some((car) => car.id === value) ? (value as CarId) : fallback;
+}
+
+function parseCars(value: unknown, fallback: CarId[]): CarId[] {
+  if (!Array.isArray(value)) return fallback;
+  const ids = value.filter((id): id is CarId => CARS.some((car) => car.id === id));
+  return ids.length ? ids : fallback;
+}
