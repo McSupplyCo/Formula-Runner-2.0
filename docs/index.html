@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Formula Runner 2.0 — Floor it. Don't stop.</title>
+    <meta
+      name="description"
+      content="An arcade night-circuit racer for the browser. Auto-accelerate, thread four lanes of traffic, charge boost off near misses. No install, no ads, no licensed brands."
+    />
+    <meta name="theme-color" content="#060d18" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://mcsupplyco.github.io/Formula-Runner-2.0/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Formula Runner 2.0 — Floor it. Don't stop." />
+    <meta
+      property="og:description"
+      content="An arcade night-circuit racer for the browser. Thread four lanes of traffic at 286 kph and let the combo do the scoring."
+    />
+    <meta property="og:url" content="https://mcsupplyco.github.io/Formula-Runner-2.0/" />
+    <meta property="og:image" content="https://mcsupplyco.github.io/Formula-Runner-2.0/screenshots/playing.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=DM+Sans:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="landing.css" />
+    <script>
+      document.documentElement.className += " js";
+    </script>
+  </head>
+
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav">
+      <a class="mark" href="#top"><b>Formula Runner</b><i>2.0</i></a>
+      <nav class="nav-links">
+        <a class="hide-sm" href="#loop">The loop</a>
+        <a class="hide-sm" href="#cars">Cars</a>
+        <a class="hide-sm" href="#circuit">Circuit</a>
+        <a href="https://github.com/McSupplyCo/Formula-Runner-2.0">Source</a>
+        <a href="play/">Play</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-fallback" aria-hidden="true"></div>
+        <canvas class="hero-canvas" id="circuit-canvas" aria-hidden="true"></canvas>
+        <div class="hero-scrim" aria-hidden="true"></div>
+
+        <div class="shell">
+          <div class="hero-inner">
+            <p class="kicker">Arcade night circuit · Web · v2.0</p>
+
+            <h1>
+              <span class="line"><span>Floor it.</span></span>
+              <span class="line"><span>Don't stop.</span></span>
+            </h1>
+
+            <p class="lead">
+              An original formula car, four lanes of night traffic, and no reason to lift.
+              Thread the gaps to charge boost, spend it to make the next gap tighter.
+              Loads in a browser tab.
+            </p>
+
+            <div class="hero-actions">
+              <a class="btn btn--primary" href="play/" data-throttle>
+                <span>Play in browser</span><span class="arrow" aria-hidden="true">→</span>
+              </a>
+              <a class="btn btn--ghost" href="https://github.com/McSupplyCo/Formula-Runner-2.0">
+                <span>View the source</span><span class="arrow" aria-hidden="true">↗</span>
+              </a>
+            </div>
+
+            <dl class="hero-meta">
+              <div><dt>286</dt><dd>kph top end</dd></div>
+              <div><dt>4</dt><dd>lanes of traffic</dd></div>
+              <div><dt>&times;8</dt><dd>combo ceiling</dd></div>
+              <div><dt>0</dt><dd>installs</dd></div>
+            </dl>
+          </div>
+        </div>
+
+        <p class="scroll-cue"><i aria-hidden="true"></i> Scroll</p>
+      </section>
+
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee-track">
+          <ul>
+            <li>Near miss</li><li>Overtake</li><li>Boost</li><li>Combo &times;8</li>
+            <li>Harbor Lights</li><li>Neon Cut</li><li>Storm Ribbon</li><li>Apex Void</li>
+            <li>60 fps</li><li>No install</li><li>No ads</li><li>Original livery</li>
+          </ul>
+          <ul>
+            <li>Near miss</li><li>Overtake</li><li>Boost</li><li>Combo &times;8</li>
+            <li>Harbor Lights</li><li>Neon Cut</li><li>Storm Ribbon</li><li>Apex Void</li>
+            <li>60 fps</li><li>No install</li><li>No ads</li><li>Original livery</li>
+          </ul>
+        </div>
+      </div>
+
+      <section class="section" id="loop">
+        <div class="shell">
+          <div class="section-head reveal">
+            <p class="kicker">01 — The loop</p>
+            <h2>One decision,<br />four hundred times</h2>
+            <p class="lead">
+              Formula Runner is not a driving simulator and does not pretend to be. It is a
+              single repeated choice — which gap, how close — taken at increasing speed until
+              you get it wrong.
+            </p>
+          </div>
+
+          <div class="steps">
+            <article class="step reveal">
+              <p class="num">01</p>
+              <h3>Auto-accelerate</h3>
+              <p>
+                The throttle is not your problem. The car pulls toward its top speed on its own,
+                and steering stays fully independent of it. Braking exists. You will rarely want it.
+              </p>
+            </article>
+            <article class="step reveal">
+              <p class="num">02</p>
+              <h3>Thread the gap</h3>
+              <p>
+                Traffic arrives in authored patterns that always leave a lane open. Slide past
+                within 2.35 m and it registers as a near miss — the combo climbs and holds for
+                2.6 seconds, up to &times;8.
+              </p>
+            </article>
+            <article class="step reveal">
+              <p class="num">03</p>
+              <h3>Spend the boost</h3>
+              <p>
+                Each near miss charges the bar 16%. Cash it in for 26% more speed, which shortens
+                every gap ahead and raises what each one pays. The risk compounds on purpose.
+              </p>
+            </article>
+          </div>
+
+          <ul class="facts">
+            <li class="reveal">
+              <b>Scoring</b>
+              <span>Distance scaled by speed, plus 120 a near miss and 60 an overtake — both multiplied by the live combo.</span>
+            </li>
+            <li class="reveal">
+              <b>Run length</b>
+              <span>Minutes, not hours. One collision ends it, and one click puts you back on the road.</span>
+            </li>
+            <li class="reveal">
+              <b>Difficulty</b>
+              <span>Spawns tighten from 1.55 s to 0.72 s and traffic speeds up from 78 to 168 kph over the first 4,500 m.</span>
+            </li>
+            <li class="reveal">
+              <b>Your data</b>
+              <span>A versioned local save holds your best score and unlocks. Nothing leaves the browser.</span>
+            </li>
+            <li class="reveal">
+              <b>Original</b>
+              <span>No licensed teams, circuits, liveries, or audio. Every car and marking is built in-engine.</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <div class="shell"><div class="rule" aria-hidden="true"></div></div>
+
+      <section class="section" id="cars">
+        <div class="shell">
+          <div class="section-head reveal">
+            <p class="kicker">02 — The grid</p>
+            <h2>Three cars.<br />One night.</h2>
+            <p class="lead">
+              Same road, three different arguments about how to survive it. Apex is open from the
+              first run; the other two unlock against your best score.
+            </p>
+          </div>
+
+          <div class="cars">
+            <article class="car reveal" style="--car: #00e5ff">
+              <div class="car-top">
+                <h3>Apex</h3>
+                <p class="unlock">Unlocked</p>
+              </div>
+              <p>Balanced race trim. Learn the night here.</p>
+              <ul class="stats">
+                <li><span>Top speed</span><span class="bar"><i style="--w: 87%"></i></span><span class="val">248</span></li>
+                <li><span>Accel</span><span class="bar"><i style="--w: 88%"></i></span><span class="val">42</span></li>
+                <li><span>Steering</span><span class="bar"><i style="--w: 73%"></i></span><span class="val">22</span></li>
+                <li><span>Grip</span><span class="bar"><i style="--w: 78%"></i></span><span class="val">14</span></li>
+              </ul>
+            </article>
+
+            <article class="car reveal" style="--car: #39ff14">
+              <div class="car-top">
+                <h3>Drift</h3>
+                <p class="unlock">Best 900</p>
+              </div>
+              <p>Snappier steering. Slightly lower top end.</p>
+              <ul class="stats">
+                <li><span>Top speed</span><span class="bar"><i style="--w: 80%"></i></span><span class="val">228</span></li>
+                <li><span>Accel</span><span class="bar"><i style="--w: 100%"></i></span><span class="val">48</span></li>
+                <li><span>Steering</span><span class="bar"><i style="--w: 100%"></i></span><span class="val">30</span></li>
+                <li><span>Grip</span><span class="bar"><i style="--w: 100%"></i></span><span class="val">18</span></li>
+              </ul>
+            </article>
+
+            <article class="car reveal" style="--car: #ff006e">
+              <div class="car-top">
+                <h3>Surge</h3>
+                <p class="unlock">Best 2,200</p>
+              </div>
+              <p>Highest speed. Demands earlier decisions.</p>
+              <ul class="stats">
+                <li><span>Top speed</span><span class="bar"><i style="--w: 100%"></i></span><span class="val">286</span></li>
+                <li><span>Accel</span><span class="bar"><i style="--w: 75%"></i></span><span class="val">36</span></li>
+                <li><span>Steering</span><span class="bar"><i style="--w: 57%"></i></span><span class="val">17</span></li>
+                <li><span>Grip</span><span class="bar"><i style="--w: 61%"></i></span><span class="val">11</span></li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <div class="shell"><div class="rule" aria-hidden="true"></div></div>
+
+      <section class="section" id="circuit">
+        <div class="shell">
+          <div class="section-head reveal">
+            <p class="kicker">03 — The circuit</p>
+            <h2>Four zones,<br />one road</h2>
+            <p class="lead">
+              The circuit never branches. It re-lights. Push far enough and the fog, the horizon,
+              the rails, and the windows in the skyline all change colour under you.
+            </p>
+          </div>
+
+          <div class="zones">
+            <article class="zone reveal" style="--z: #00e5ff">
+              <div class="bandline" aria-hidden="true"></div>
+              <p class="dist">0 – 800 m</p>
+              <h3>Harbor Lights</h3>
+              <p>Cyan rails over cold water. Wide gaps, slow traffic — this is where the geometry makes sense.</p>
+            </article>
+            <article class="zone reveal" style="--z: #ff006e">
+              <div class="bandline" aria-hidden="true"></div>
+              <p class="dist">800 – 2,000 m</p>
+              <h3>Neon Cut</h3>
+              <p>Magenta straight through the city. Traffic tightens up and starts changing lanes on you.</p>
+            </article>
+            <article class="zone reveal" style="--z: #39ff14">
+              <div class="bandline" aria-hidden="true"></div>
+              <p class="dist">2,000 – 4,000 m</p>
+              <h3>Storm Ribbon</h3>
+              <p>Green wash, quick support cars, and more weaving than the lane count really allows.</p>
+            </article>
+            <article class="zone reveal" style="--z: #ffd600">
+              <div class="bandline" aria-hidden="true"></div>
+              <p class="dist">4,000 m +</p>
+              <h3>Apex Void</h3>
+              <p>Gold on black. Everything is fast, the road barely opens, and the combo is the only real score.</p>
+            </article>
+          </div>
+
+          <dl class="ramp">
+            <div class="reveal"><dt>1.55s <em>→</em> 0.72s</dt><dd>Spawn interval</dd></div>
+            <div class="reveal"><dt>78 <em>→</em> 168</dt><dd>Traffic kph</dd></div>
+            <div class="reveal"><dt>5% <em>→</em> 42%</dt><dd>Lane changers</dd></div>
+            <div class="reveal"><dt>&times;1 <em>→</em> &times;8</dt><dd>Combo</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section section--tight">
+        <div class="shell">
+          <div class="shots">
+            <figure class="shot reveal">
+              <img
+                src="screenshots/playing.png"
+                width="1440"
+                height="900"
+                loading="lazy"
+                decoding="async"
+                alt="Gameplay: the formula car at 248 kph in Harbor Lights, overtake and near-miss callouts on screen at combo times two."
+              />
+              <figcaption>Harbor Lights · 248 kph · combo &times;2</figcaption>
+            </figure>
+            <figure class="shot reveal">
+              <img
+                src="screenshots/countdown.png"
+                width="1440"
+                height="900"
+                loading="lazy"
+                decoding="async"
+                alt="The start of a run: the car rolling out at 221 kph with the road stretching to the horizon."
+              />
+              <figcaption>Lights out</figcaption>
+            </figure>
+            <figure class="shot reveal">
+              <img
+                src="screenshots/title.png"
+                width="1440"
+                height="900"
+                loading="lazy"
+                decoding="async"
+                alt="The title screen with the three car options and the Race button."
+              />
+              <figcaption>Title · car select</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <div class="shell"><div class="rule" aria-hidden="true"></div></div>
+
+      <section class="section" id="start">
+        <div class="shell">
+          <div class="section-head reveal">
+            <p class="kicker">04 — Run it yourself</p>
+            <h2>Clone,<br />install, race</h2>
+            <p class="lead">
+              Vite, TypeScript, and Three.js. No engine to download, no editor to open, no account
+              to make.
+            </p>
+          </div>
+
+          <div class="start-grid">
+            <div class="code reveal">
+              <header><i aria-hidden="true"></i> terminal</header>
+              <pre><code><span class="p">$</span> git clone https://github.com/McSupplyCo/Formula-Runner-2.0.git
+<span class="p">$</span> cd Formula-Runner-2.0
+<span class="p">$</span> npm install
+<span class="p">$</span> npm run dev
+
+<span class="c"># then open the local URL and click Race</span>
+<span class="c"># checks: npm test · npm run typecheck · npm run build</span></code></pre>
+            </div>
+
+            <table class="keys reveal">
+              <thead>
+                <tr><th scope="col">Input</th><th scope="col">Action</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd></td><td>Steer</td></tr>
+                <tr><td><kbd>S</kbd> or <kbd>↓</kbd></td><td>Brake</td></tr>
+                <tr><td><kbd>Space</kbd> or <kbd>Shift</kbd></td><td>Boost</td></tr>
+                <tr><td><kbd>Esc</kbd> or <kbd>P</kbd></td><td>Pause</td></tr>
+                <tr><td><kbd>Drag</kbd></td><td>Steer on pointer or touch</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="close-cta">
+        <div class="shell">
+          <div class="inner">
+            <p class="kicker reveal">Lights out</p>
+            <h2 class="display reveal">Runs are short.<br />Best scores are not.</h2>
+            <p class="reveal">One tab, one car, one line through the traffic. See how far the night goes.</p>
+            <a class="btn btn--primary reveal" href="play/">
+              <span>Play Formula Runner 2.0</span><span class="arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="shell foot-grid">
+        <div>
+          <a class="mark" href="#top"><b>Formula Runner</b><i>2.0</i></a>
+          <small>
+            &copy; <span id="year">2026</span> McSupplyCo. Built with Vite, TypeScript, and Three.js.<br />
+            No licensed Formula 1 teams, tracks, liveries, or audio — every car, marking, and
+            circuit here is original.
+          </small>
+        </div>
+        <nav>
+          <a href="https://github.com/McSupplyCo/Formula-Runner-2.0">Repository</a>
+          <a href="https://github.com/McSupplyCo/Formula-Runner-2.0/blob/main/docs/DESIGN.md">Design doc</a>
+          <a href="https://github.com/McSupplyCo/Formula-Runner">Unity 1.0</a>
+          <a href="play/">Play</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="landing.js" defer></script>
+  </body>
+</html>
