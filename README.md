@@ -49,7 +49,9 @@ npm run build
 npx --yes serve docs   # or: python3 -m http.server -d docs
 ```
 
-`.github/workflows/pages.yml` publishes it on every push to `main`: the landing page at the site root, the built game at `/play/`. It needs GitHub Pages set to **Source: GitHub Actions** in the repository settings once.
+That preview is the landing page only. In-page **Play** buttons point at `play/`, which is not in `docs/`, so those links 404 in this mode. Play the game locally with `npm run dev`.
+
+`.github/workflows/pages.yml` publishes the composed site on every push to `main`: the landing page at the site root, the Vite build at `/play/`. Pull requests run `npm test`, `npm run typecheck`, and `npm run build` without deploying. Pages is set to **Source: GitHub Actions**.
 
 ## Linear
 
