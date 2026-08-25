@@ -64,6 +64,8 @@ export class Game {
   private trailTip = new THREE.Vector3();
   private trailHistory: THREE.Vector3[] = [];
   private speedLines: THREE.Points;
+  private spray: THREE.Points;
+  private sprayLife = new Float32Array(0);
   private boostTrail: THREE.Line;
   private boostGlow: THREE.Mesh;
   private boostLight: THREE.PointLight;
@@ -90,11 +92,13 @@ export class Game {
     this.speedLines = this.makeSpeedLines();
     this.speedLines.visible = false;
     this.scene.add(this.speedLines);
+    this.spray = this.makeSpray();
+    this.scene.add(this.spray);
     this.boostTrail = this.makeBoostTrail();
     this.scene.add(this.boostTrail);
     this.boostGlow = this.makeBoostGlow();
     this.scene.add(this.boostGlow);
-    this.boostLight = new THREE.PointLight(0x66f0ff, 0, 9, 2);
+    this.boostLight = new THREE.PointLight(0xffd8a8, 0, 8, 2);
     this.scene.add(this.boostLight);
     this.setupBloom();
 
@@ -118,7 +122,7 @@ export class Game {
     for (const car of this.traffic) this.release(car);
     this.traffic = [];
     this.spawnClock = 1.6;
-    this.countdown = 3.15;
+    this.countdown = 2.95;
     this.crashTimer = 0;
     this.shake = 0;
     this.lastBest = false;
@@ -162,8 +166,8 @@ export class Game {
 
     if (this.mode === "countdown") {
       this.countdown -= dt;
-      const n = Math.ceil(this.countdown);
-      this.ui.countdown.textContent = this.countdown > 0.28 ? String(Math.max(1, n)) : "GO";
+      const n = Math.min(3, Math.max(1, Math.ceil(this.countdown)));
+      this.ui.countdown.textContent = this.countdown > 0.28 ? String(n) : "GO";
       this.setVisible("countdown", true);
       if (this.countdown <= 0) {
         this.mode = "playing";
@@ -327,7 +331,7 @@ export class Game {
     const points = nearMissScore(this.run.combo, clearance);
     this.run.score += points;
     this.run.boost = clamp(this.run.boost + DRIVE.boostNearMissCharge * (0.75 + this.run.combo * 0.06), 0, 1);
-    this.pushToast(`NEAR MISS ×${this.run.combo}`, "#39FF14");
+    this.pushToast(`NEAR MISS ×${this.run.combo}`, "#e8f0f8");
     this.audio.playNearMiss(this.run.combo);
     this.buzz(12);
     this.shake = Math.max(this.shake, 0.03);
@@ -338,7 +342,7 @@ export class Game {
     const points = overtakeScore(this.run.combo);
     this.run.score += points;
     if (lateral < 4.2) {
-      this.pushToast(`OVERTAKE +${points}`, "#00E5FF");
+      this.pushToast(`OVERTAKE +${points}`, "#dce6f0");
       this.audio.playOvertake();
     }
   }
@@ -403,6 +407,7 @@ export class Game {
     this.updateCamera(dt);
     this.updateBoostFx(dt);
     this.updateSpeedLines(dt);
+    this.updateSpray(dt);
     this.toasts = this.toasts.filter((toast) => {
       toast.life -= dt;
       return toast.life > 0;
@@ -413,9 +418,14 @@ export class Game {
   private spinWheels(root: THREE.Object3D, speedKph: number, dt: number) {
     const v = speedKph / 3.6;
     root.traverse((obj) => {
-      if (!obj.userData.spin) return;
-      const radius = Number(obj.userData.radius) || 0.32;
-      obj.rotation.x += (v / radius) * dt;
+      if (obj.userData.spin) {
+        const radius = Number(obj.userData.radius) || 0.32;
+        obj.rotation.x += (v / radius) * dt;
+      }
+      if (obj.userData.ground) {
+        const base = Number(obj.userData.baseScaleY) || 2;
+        (obj as THREE.Mesh).scale.y = base * (1 + speedKph / 480);
+      }
     });
   }
 
@@ -512,6 +522,8 @@ export class Game {
     this.boostLight.intensity = 0;
     this.boostTrail.visible = false;
     this.boostGlow.visible = false;
+    this.spray.visible = false;
+    (this.spray.material as THREE.PointsMaterial).opacity = 0;
   }
 
   private setupBloom() {
@@ -567,10 +579,10 @@ export class Game {
     const points = new THREE.Points(
       geo,
       new THREE.PointsMaterial({
-        color: 0x9af4ff,
-        size: 0.07,
+        color: 0xe8eef4,
+        size: 0.055,
         transparent: true,
-        opacity: 0.34,
+        opacity: 0.22,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
@@ -607,13 +619,71 @@ export class Game {
     pos.needsUpdate = true;
   }
 
+  private makeSpray() {
+    const count = 88;
+    this.sprayLife = new Float32Array(count);
+    const array = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      this.sprayLife[i] = Math.random();
+      array[i * 3] = 0;
+      array[i * 3 + 1] = 0.08;
+      array[i * 3 + 2] = 0;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(array, 3));
+    const points = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        color: 0xc8ccd0,
+        size: 0.05,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+    );
+    points.visible = false;
+    points.frustumCulled = false;
+    return points;
+  }
+
+  private updateSpray(dt: number) {
+    const on = this.mode === "playing" && this.player.speed > 88 && !this.save.reducedMotion;
+    const mat = this.spray.material as THREE.PointsMaterial;
+    mat.opacity = damp(mat.opacity, on ? 0.32 : 0, 7, dt);
+    this.spray.visible = mat.opacity > 0.02;
+    if (!this.spray.visible) return;
+    const pos = this.spray.geometry.getAttribute("position");
+    const drift = (this.player.speed / 3.6) * dt;
+    for (let i = 0; i < pos.count; i++) {
+      this.sprayLife[i] += dt * (1.6 + this.player.speed / 160);
+      if (this.sprayLife[i] >= 1) {
+        this.sprayLife[i] = 0;
+        const side = i % 2 === 0 ? -0.84 : 0.84;
+        pos.setXYZ(
+          i,
+          this.player.x + side + (Math.random() - 0.5) * 0.16,
+          0.06 + Math.random() * 0.05,
+          this.player.z - 1.05 - Math.random() * 0.35,
+        );
+      } else {
+        pos.setXYZ(
+          i,
+          pos.getX(i) + (Math.random() - 0.5) * 0.03,
+          pos.getY(i) + dt * 0.42,
+          pos.getZ(i) - drift * 0.35,
+        );
+      }
+    }
+    pos.needsUpdate = true;
+  }
+
   private makeBoostTrail() {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(22 * 3), 3));
     const line = new THREE.Line(
       geo,
       new THREE.LineBasicMaterial({
-        color: 0x66f7ff,
+        color: 0xffe0b8,
         transparent: true,
         opacity: 0,
         blending: THREE.AdditiveBlending,
@@ -626,12 +696,12 @@ export class Game {
   }
 
   private makeBoostGlow() {
-    const geo = new THREE.ConeGeometry(0.12, 1.85, 8, 1, true);
+    const geo = new THREE.ConeGeometry(0.1, 1.45, 8, 1, true);
     geo.rotateX(-Math.PI / 2);
     const glow = new THREE.Mesh(
       geo,
       new THREE.MeshBasicMaterial({
-        color: 0x7cf7ff,
+        color: 0xffd8a0,
         transparent: true,
         opacity: 0,
         blending: THREE.AdditiveBlending,

@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { makeCarbonTexture } from "./textures";
-import { BRAND } from "./tuning";
 
 const shared: Record<string, THREE.Material> = {};
 let carbonMap: THREE.CanvasTexture | null = null;
@@ -15,16 +14,14 @@ function mesh(geometry: THREE.BufferGeometry, material: THREE.Material) {
   return new THREE.Mesh(geometry, material);
 }
 
-function paint(color: number, extraEmissive = 0.035) {
+function paint(color: number) {
   return new THREE.MeshPhysicalMaterial({
     color,
-    metalness: 0.62,
-    roughness: 0.26,
+    metalness: 0.58,
+    roughness: 0.3,
     clearcoat: 1,
-    clearcoatRoughness: 0.1,
-    envMapIntensity: 1.45,
-    emissive: color,
-    emissiveIntensity: extraEmissive,
+    clearcoatRoughness: 0.14,
+    envMapIntensity: 1.25,
   });
 }
 
@@ -44,11 +41,13 @@ function rubber() {
 }
 
 function glass() {
-  return mat("glass", {
-    color: 0x0a1218,
-    metalness: 0.85,
-    roughness: 0.06,
-    envMapIntensity: 1.5,
+  return new THREE.MeshPhysicalMaterial({
+    color: 0x0c141c,
+    metalness: 0.15,
+    roughness: 0.08,
+    envMapIntensity: 1.35,
+    transparent: true,
+    opacity: 0.82,
   });
 }
 
@@ -86,6 +85,8 @@ function contactShadow(width: number, length: number) {
   shadow.position.y = 0.015;
   shadow.scale.set(width * 0.55, length * 0.52, 1);
   shadow.renderOrder = 1;
+  shadow.userData.ground = true;
+  shadow.userData.baseScaleY = length * 0.52;
   return shadow;
 }
 
@@ -93,7 +94,7 @@ function makeWheel(front: boolean) {
   const group = new THREE.Group();
   const radius = front ? 0.31 : 0.35;
   const width = front ? 0.32 : 0.4;
-  const tire = mesh(new THREE.CylinderGeometry(radius, radius, width, 24, 1, false), rubber());
+  const tire = mesh(new THREE.CylinderGeometry(radius, radius, width, 28, 1, false), rubber());
   tire.rotation.z = Math.PI / 2;
   const rim = mesh(
     new THREE.CylinderGeometry(radius * 0.62, radius * 0.62, width * 0.42, 16),
@@ -151,14 +152,14 @@ export function createFormulaCar(body: number, accent: number): THREE.Group {
   const group = new THREE.Group();
   group.name = "formula";
 
-  const coat = paint(body, 0.045);
+  const coat = paint(body);
   const neon = new THREE.MeshPhysicalMaterial({
     color: accent,
     emissive: accent,
-    emissiveIntensity: 1.15,
-    metalness: 0.35,
-    roughness: 0.22,
-    clearcoat: 0.6,
+    emissiveIntensity: 0.22,
+    metalness: 0.4,
+    roughness: 0.28,
+    clearcoat: 0.45,
   });
   const dark = carbon();
 
@@ -205,12 +206,18 @@ export function createFormulaCar(body: number, accent: number): THREE.Group {
   const scoop = mesh(new THREE.BoxGeometry(0.2, 0.06, 0.2), dark);
   scoop.position.set(0, 0.96, -0.2);
   group.add(scoop);
+  const team = mesh(new THREE.BoxGeometry(0.08, 0.05, 0.22), neon);
+  team.position.set(0, 0.9, -0.08);
+  group.add(team);
 
   const cockpit = mesh(new RoundedBoxGeometry(0.48, 0.14, 0.58, 2, 0.04), dark);
   cockpit.position.set(0, 0.58, 0.28);
   group.add(cockpit);
 
-  const helmet = mesh(new THREE.SphereGeometry(0.13, 14, 12), neon);
+  const helmet = mesh(
+    new THREE.SphereGeometry(0.13, 14, 12),
+    mat("helmet", { color: 0xd4dae0, metalness: 0.42, roughness: 0.38, envMapIntensity: 0.9 }),
+  );
   helmet.position.set(0, 0.68, 0.22);
   group.add(helmet);
   const visor = mesh(new THREE.SphereGeometry(0.135, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), glass());
@@ -225,7 +232,7 @@ export function createFormulaCar(body: number, accent: number): THREE.Group {
   stay.position.set(0, 0.88, 0.12);
   group.add(stay);
 
-  const strip = mesh(new THREE.BoxGeometry(0.05, 0.022, 2.4), neon);
+  const strip = mesh(new THREE.BoxGeometry(0.05, 0.022, 2.4), dark);
   strip.position.set(0, 0.56, 0.1);
   group.add(strip);
 
@@ -247,7 +254,7 @@ export function createFormulaCar(body: number, accent: number): THREE.Group {
   rearMain.position.set(0, 1.05, -1.5);
   rearMain.rotation.x = 0.08;
   group.add(rearMain);
-  const rearFlap = mesh(new THREE.BoxGeometry(1.55, 0.032, 0.16), neon);
+  const rearFlap = mesh(new THREE.BoxGeometry(1.55, 0.032, 0.16), coat);
   rearFlap.position.set(0, 1.13, -1.4);
   group.add(rearFlap);
   for (const x of [-0.88, 0.88]) {
@@ -315,6 +322,30 @@ function extrudeBody(points: Array<[number, number]>, width: number) {
   return geo;
 }
 
+function addBodywork(group: THREE.Group, cabinY: number, cabinZ: number) {
+  const dark = carbon();
+  for (const x of [-0.62, 0.62]) {
+    const frontArch = mesh(new THREE.BoxGeometry(0.1, 0.16, 0.5), dark);
+    frontArch.position.set(x, 0.36, 1.18);
+    group.add(frontArch);
+    const rearArch = mesh(new THREE.BoxGeometry(0.1, 0.16, 0.5), dark);
+    rearArch.position.set(x, 0.38, -1.12);
+    group.add(rearArch);
+    const pillar = mesh(new THREE.BoxGeometry(0.045, 0.26, 0.08), dark);
+    pillar.position.set(x * 0.7, cabinY, cabinZ + 0.52);
+    group.add(pillar);
+    const mirror = mesh(new RoundedBoxGeometry(0.1, 0.045, 0.07, 1, 0.012), dark);
+    mirror.position.set(x, cabinY - 0.08, 0.48);
+    group.add(mirror);
+  }
+  const grille = mesh(new THREE.BoxGeometry(0.92, 0.15, 0.05), dark);
+  grille.position.set(0, 0.38, 2.0);
+  group.add(grille);
+  const under = mesh(new THREE.BoxGeometry(1.48, 0.05, 3.35), dark);
+  under.position.set(0, 0.15, 0);
+  group.add(under);
+}
+
 function addTrafficWheels(group: THREE.Group, track = 0.78, wheelbase = 1.32) {
   placeWheel(group, -track, 0.29, wheelbase, true);
   placeWheel(group, track, 0.29, wheelbase, true);
@@ -331,7 +362,7 @@ export function createTrafficCar(kind: "gt" | "support" | "safety"): THREE.Group
 function makeGt() {
   const group = new THREE.Group();
   group.userData.kind = "gt";
-  const body = paint(0x2a3340, 0.02);
+  const body = paint(0x2a3340);
   group.add(contactShadow(1.85, 4.2));
   const hull = mesh(
     extrudeBody(
@@ -355,6 +386,7 @@ function makeGt() {
   const cabin = mesh(new RoundedBoxGeometry(1.28, 0.32, 1.42, 2, 0.08), glass());
   cabin.position.set(0, 0.92, -0.12);
   group.add(cabin);
+  addBodywork(group, 0.92, -0.12);
   const spoiler = mesh(new THREE.BoxGeometry(1.62, 0.04, 0.24), body);
   spoiler.position.set(0, 0.98, -1.92);
   group.add(spoiler);
@@ -373,7 +405,7 @@ function makeGt() {
 function makeSupport() {
   const group = new THREE.Group();
   group.userData.kind = "support";
-  const body = paint(0x1a2430, 0.025);
+  const body = paint(0x1a2430);
   group.add(contactShadow(1.9, 4.25));
   const hull = mesh(
     extrudeBody(
@@ -396,9 +428,10 @@ function makeSupport() {
   const cabin = mesh(new RoundedBoxGeometry(1.55, 0.38, 1.05, 2, 0.06), glass());
   cabin.position.set(0, 1.12, 0.85);
   group.add(cabin);
+  addBodywork(group, 1.12, 0.85);
   const bar = mesh(
     new THREE.BoxGeometry(1.05, 0.08, 0.16),
-    new THREE.MeshStandardMaterial({ color: BRAND.cyan, emissive: BRAND.cyan, emissiveIntensity: 1.4 }),
+    new THREE.MeshStandardMaterial({ color: 0xffc56a, emissive: 0xffc56a, emissiveIntensity: 0.45 }),
   );
   bar.position.set(0, 1.38, 0.15);
   group.add(bar);
@@ -414,7 +447,7 @@ function makeSupport() {
 function makeSafety() {
   const group = new THREE.Group();
   group.userData.kind = "safety";
-  const body = paint(0xc9a227, 0.06);
+  const body = paint(0xc9a227);
   group.add(contactShadow(1.85, 4.2));
   const hull = mesh(
     extrudeBody(
@@ -438,9 +471,10 @@ function makeSafety() {
   const cabin = mesh(new RoundedBoxGeometry(1.32, 0.34, 1.5, 2, 0.07), glass());
   cabin.position.set(0, 0.9, -0.08);
   group.add(cabin);
+  addBodywork(group, 0.9, -0.08);
   const lightbar = mesh(
     new THREE.BoxGeometry(1.1, 0.1, 0.24),
-    new THREE.MeshStandardMaterial({ color: BRAND.gold, emissive: BRAND.gold, emissiveIntensity: 1.8 }),
+    new THREE.MeshStandardMaterial({ color: 0xd4a017, emissive: 0xd4a017, emissiveIntensity: 0.55 }),
   );
   lightbar.position.set(0, 1.16, 0.02);
   group.add(lightbar);
@@ -479,10 +513,37 @@ export function createLightPole(): THREE.Group {
     new THREE.MeshStandardMaterial({
       color: 0xfff0d4,
       emissive: 0xffe6b8,
-      emissiveIntensity: 1.6,
+      emissiveIntensity: 1.15,
     }),
   );
   glow.position.set(-0.95, 6.14, 0);
-  group.add(pole, arm, housing, glow);
+  const pool = mesh(
+    new THREE.CircleGeometry(2.6, 14),
+    mat("lampPool", {
+      color: 0xffe4bc,
+      transparent: true,
+      opacity: 0.11,
+      depthWrite: false,
+    }),
+  );
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.set(-1.15, 0.03, 0.6);
+  group.add(pole, arm, housing, glow, pool);
+  return group;
+}
+
+export function createTree(): THREE.Group {
+  const group = new THREE.Group();
+  const bark = mat("trunk", { color: 0x2a2218, roughness: 0.92, metalness: 0.05 });
+    const leaf = mat("foliage", { color: 0x2c3d32, roughness: 0.9, metalness: 0.02 });
+  const trunk = mesh(new THREE.CylinderGeometry(0.07, 0.12, 1.15, 6), bark);
+  trunk.position.y = 0.55;
+  const crown = mesh(new THREE.IcosahedronGeometry(0.62, 0), leaf);
+  crown.position.set(0, 1.85, 0);
+  crown.scale.set(1.05, 1.35, 1.05);
+  const lower = mesh(new THREE.IcosahedronGeometry(0.48, 0), leaf);
+  lower.position.set(0.18, 1.42, -0.08);
+  lower.scale.set(1.15, 0.9, 1.1);
+  group.add(trunk, crown, lower);
   return group;
 }
