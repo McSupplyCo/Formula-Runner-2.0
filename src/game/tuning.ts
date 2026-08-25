@@ -111,9 +111,33 @@ export const CAMERA = {
   lookAhead: 14,
   follow: 9,
   fovIdle: 58,
-  fovFast: 72,
-  fovBoostExtra: 6,
-  shakeMax: 0.045,
+  fovFast: 68,
+  fovBoostExtra: 3,
+  shakeMax: 0.006,
+  lag: 5.2,
+  steerRoll: 0.016,
+  boostPunch: 1.28,
+  landDrop: 0.2,
+  lookHeight: 0.62,
+} as const;
+
+export const CHASSIS = {
+  rollVx: 0.046,
+  rollMax: 0.2,
+  pitchAccel: 0.00105,
+  pitchBrake: 0.05,
+  pitchBoost: 0.042,
+  pitchMax: 0.11,
+  squat: 0.065,
+  spring: 52,
+  damp: 9.5,
+} as const;
+
+export const BLOOM = {
+  strength: 0.16,
+  radius: 0.38,
+  threshold: 0.94,
+  exposure: 0.92,
 } as const;
 
 export const SAVE_VERSION = 2;

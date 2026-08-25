@@ -17,7 +17,19 @@ import {
   tickCombo,
 } from "../src/game/scoring";
 import { emptyRun } from "../src/game/state";
-import { ROAD } from "../src/game/tuning";
+import { BLOOM, CAMERA, CHASSIS, ROAD } from "../src/game/tuning";
+
+describe("camera feel tuning", () => {
+  it("keeps chase camera contract names", () => {
+    expect(CAMERA.fovIdle).toBeLessThan(CAMERA.fovFast);
+    expect(CAMERA.follow).toBeGreaterThan(CAMERA.lag);
+    expect(CAMERA.fovBoostExtra).toBeGreaterThan(0);
+    expect(CAMERA.height).toBeGreaterThan(0);
+    expect(CAMERA.back).toBeGreaterThan(0);
+    expect(BLOOM.threshold).toBeGreaterThan(0.5);
+    expect(CHASSIS.rollMax).toBeLessThan(0.5);
+  });
+});
 
 describe("scoring", () => {
   it("increases score with speed", () => {

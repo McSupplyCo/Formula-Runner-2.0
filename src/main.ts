@@ -26,6 +26,7 @@ const ids = [
   "combo",
   "zone",
   "boostFill",
+  "gear",
   "toast",
   "resultScore",
   "resultStats",

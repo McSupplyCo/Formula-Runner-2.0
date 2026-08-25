@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { BRAND, ROAD } from "./tuning";
 import { createLightPole } from "./vehicles";
 import {
+  makeBarrierTexture,
   makeBillboardTexture,
   makeBuildingTexture,
   makeKerbTexture,
@@ -41,6 +42,7 @@ export class TrackWorld {
   private edgeMat: THREE.MeshStandardMaterial;
   private kerbMat: THREE.MeshStandardMaterial;
   private wallMat: THREE.MeshStandardMaterial;
+  private gravelMat: THREE.MeshStandardMaterial;
   private fog: THREE.Fog;
   private skyMat: THREE.ShaderMaterial;
   private sky: THREE.Mesh;
@@ -49,41 +51,53 @@ export class TrackWorld {
   private citySlots: Array<{ x: number; y: number; z: number; sx: number; sy: number; sz: number }> = [];
   private stars: THREE.Points;
   private ground: THREE.Mesh;
+  private streetLights: THREE.PointLight[] = [];
+  private lightTint = new THREE.Color(0xffe4bc);
 
   constructor(private scene: THREE.Scene) {
-    this.fog = new THREE.Fog(ZONES[0].fog, 55, 260);
+    this.fog = new THREE.Fog(ZONES[0].fog, 48, 240);
     scene.fog = this.fog;
     scene.background = new THREE.Color(ZONES[0].fog);
 
-    this.roadMat = new THREE.MeshStandardMaterial({
+    this.roadMat = new THREE.MeshPhysicalMaterial({
       map: makeRoadTexture(),
       roughnessMap: makeRoadRoughness(),
-      roughness: 0.28,
-      metalness: 0.22,
+      roughness: 0.4,
+      metalness: 0,
+      envMapIntensity: 0.72,
     });
     this.edgeMat = new THREE.MeshStandardMaterial({
       color: BRAND.cyan,
       emissive: BRAND.cyan,
-      emissiveIntensity: 2.8,
-      roughness: 0.25,
+      emissiveIntensity: 0.42,
+      roughness: 0.4,
     });
     this.kerbMat = new THREE.MeshStandardMaterial({
       map: makeKerbTexture(),
-      roughness: 0.55,
-      metalness: 0.1,
+      roughness: 0.5,
+      metalness: 0.08,
     });
     this.wallMat = new THREE.MeshStandardMaterial({
-      color: 0x1a2430,
-      roughness: 0.55,
-      metalness: 0.35,
+      map: makeBarrierTexture(),
+      color: 0x8a93a0,
+      roughness: 0.38,
+      metalness: 0.72,
+      envMapIntensity: 0.85,
     });
+    this.gravelMat = new THREE.MeshStandardMaterial({ color: 0x1a1814, roughness: 1, metalness: 0 });
 
-    const hemi = new THREE.HemisphereLight(0x8eb4d8, 0x0a1018, 0.95);
-    const moon = new THREE.DirectionalLight(0xe8f2ff, 1.15);
-    moon.position.set(-22, 48, 8);
-    const fill = new THREE.DirectionalLight(0x00e5ff, 0.28);
-    fill.position.set(16, 10, -8);
+    const hemi = new THREE.HemisphereLight(0x7a96b4, 0x080c12, 0.58);
+    const moon = new THREE.DirectionalLight(0xc8d8ee, 0.72);
+    moon.position.set(-18, 42, 10);
+    const fill = new THREE.DirectionalLight(0x1a3040, 0.18);
+    fill.position.set(14, 8, -10);
     scene.add(hemi, moon, fill);
+
+    for (let i = 0; i < 8; i++) {
+      const lamp = new THREE.PointLight(0xffe4bc, 3.6, 18, 1.9);
+      this.streetLights.push(lamp);
+      scene.add(lamp);
+    }
 
     this.skyMat = this.makeSky();
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(380, 32, 20), this.skyMat);
@@ -144,6 +158,30 @@ export class TrackWorld {
       this.city.setMatrixAt(i, this.cityDummy.matrix);
     }
     this.city.instanceMatrix.needsUpdate = true;
+    this.placeStreetLights(playerZ, zone);
+  }
+
+  private placeStreetLights(playerZ: number, zone: Zone) {
+    this.lightTint.setHex(zone.neon).lerp(new THREE.Color(0xffe4bc), 0.78);
+    const poles: Array<{ x: number; z: number; d: number }> = [];
+    for (const segment of this.segments) {
+      const z = segment.position.z;
+      for (const side of [-1, 1] as const) {
+        poles.push({
+          x: side * (ROAD.halfWidth + 2.55),
+          z,
+          d: Math.abs(z - (playerZ + 16)),
+        });
+      }
+    }
+    poles.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < this.streetLights.length; i++) {
+      const pole = poles[i];
+      const lamp = this.streetLights[i];
+      if (!pole) continue;
+      lamp.color.copy(this.lightTint);
+      lamp.position.set(pole.x * 0.72, 5.9, pole.z);
+    }
   }
 
   private makeSky() {
@@ -190,7 +228,7 @@ export class TrackWorld {
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     return new THREE.Points(
       geo,
-      new THREE.PointsMaterial({ color: 0xcfe8ff, size: 0.55, transparent: true, opacity: 0.7, depthWrite: false }),
+      new THREE.PointsMaterial({ color: 0xcfe8ff, size: 0.28, transparent: true, opacity: 0.55, depthWrite: false, sizeAttenuation: true }),
     );
   }
 
@@ -198,21 +236,22 @@ export class TrackWorld {
     const geo = new THREE.BoxGeometry(1, 1, 1);
     const mat = new THREE.MeshStandardMaterial({
       map: makeBuildingTexture(ZONES[0].window),
-      roughness: 0.72,
-      metalness: 0.22,
-      emissive: new THREE.Color(0x12202c),
-      emissiveIntensity: 0.35,
+      roughness: 0.78,
+      metalness: 0.18,
+      envMapIntensity: 0.35,
+      emissive: new THREE.Color(0x101820),
+      emissiveIntensity: 0.22,
     });
     const mesh = new THREE.InstancedMesh(geo, mat, CITY_COUNT);
     for (let i = 0; i < CITY_COUNT; i++) {
       const side = i % 2 === 0 ? -1 : 1;
       const slot = {
-        x: side * (22 + (i % 7) * 3.4 + (i % 5)),
+        x: side * (18 + (i % 7) * 4.2 + (i % 5) * 1.1),
         y: 0,
         z: Math.floor(i / 2) * BUILDING_SPACING,
-        sx: 4 + (i % 4),
-        sy: 10 + (i % 11) * 2.8 + (i % 3) * 4,
-        sz: 6 + (i % 5),
+        sx: 5 + (i % 5) * 1.4,
+        sy: 14 + (i % 13) * 3.4 + (i % 4) * 5,
+        sz: 7 + (i % 6) * 1.2,
       };
       this.citySlots.push(slot);
       this.cityDummy.position.set(slot.x, slot.sy / 2, slot.z);
@@ -234,34 +273,40 @@ export class TrackWorld {
     g.add(road);
 
     for (const side of [-1, 1]) {
-      const kerb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, ROAD.segmentLength), this.kerbMat);
-      kerb.position.set(side * (ROAD.halfWidth + 0.22), 0.08, 0);
+      const gravel = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.2, ROAD.segmentLength),
+        this.gravelMat,
+      );
+      gravel.rotation.x = -Math.PI / 2;
+      gravel.position.set(side * (ROAD.halfWidth + 1.35), 0.002, 0);
+      g.add(gravel);
+
+      const kerb = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, ROAD.segmentLength), this.kerbMat);
+      kerb.position.set(side * (ROAD.halfWidth + 0.18), 0.06, 0);
       g.add(kerb);
 
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, ROAD.segmentLength), this.edgeMat);
-      edge.position.set(side * (ROAD.halfWidth + 0.04), 0.05, 0);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, ROAD.segmentLength), this.edgeMat);
+      edge.position.set(side * (ROAD.halfWidth + 0.02), 0.04, 0);
       g.add(edge);
 
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.05, ROAD.segmentLength), this.wallMat);
-      wall.position.set(side * (ROAD.halfWidth + 1.05), 0.52, 0);
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.72, ROAD.segmentLength), this.wallMat);
+      wall.position.set(side * (ROAD.halfWidth + 1.12), 0.42, 0);
       g.add(wall);
 
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, ROAD.segmentLength), this.edgeMat);
-      rail.position.set(side * (ROAD.halfWidth + 1.05), 1.08, 0);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, ROAD.segmentLength), this.wallMat);
+      rail.position.set(side * (ROAD.halfWidth + 1.12), 0.8, 0);
       g.add(rail);
 
-      for (const offset of [-16, 16]) {
-        const pole = createLightPole();
-        pole.position.set(side * (ROAD.halfWidth + 2.6), 0, offset);
-        if (side > 0) pole.rotation.y = Math.PI;
-        g.add(pole);
-      }
+      const pole = createLightPole();
+      pole.position.set(side * (ROAD.halfWidth + 2.6), 0, 0);
+      if (side > 0) pole.rotation.y = Math.PI;
+      g.add(pole);
     }
 
-    const flavor = index % 5;
-    if (flavor === 1) this.addGantry(g);
-    if (flavor === 3) this.addBillboard(g, index);
-    if (flavor === 4) this.addTunnel(g);
+    const flavor = index % 8;
+    if (flavor === 2 && index > 4) this.addGantry(g);
+    if (flavor === 5 && index > 3) this.addBillboard(g, index);
+    if (flavor === 7 && index > 4) this.addTunnel(g);
 
     return g;
   }
@@ -271,23 +316,31 @@ export class TrackWorld {
       new THREE.BoxGeometry(ROAD.width + 6, 0.22, 0.5),
       new THREE.MeshStandardMaterial({
         color: 0x151c26,
-        emissive: BRAND.magenta,
-        emissiveIntensity: 0.45,
-        metalness: 0.4,
-        roughness: 0.4,
+        metalness: 0.55,
+        roughness: 0.38,
       }),
     );
     beam.position.set(0, 5.2, 0);
+    const strip = new THREE.Mesh(
+      new THREE.BoxGeometry(ROAD.width + 5.2, 0.04, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: BRAND.cyan,
+        emissive: BRAND.cyan,
+        emissiveIntensity: 0.35,
+        roughness: 0.4,
+      }),
+    );
+    strip.position.set(0, 5.08, 0);
     const left = new THREE.Mesh(new THREE.BoxGeometry(0.28, 5.2, 0.28), new THREE.MeshStandardMaterial({ color: 0x1a2430 }));
     left.position.set(-(ROAD.halfWidth + 2.6), 2.6, 0);
     const right = left.clone();
     right.position.x *= -1;
-    g.add(beam, left, right);
+    g.add(beam, strip, left, right);
   }
 
   private addBillboard(g: THREE.Group, index: number) {
     const titles = ["VOLT GRID", "NIGHT APEX", "PULSE LANE", "ZERO DRAG"];
-    const colors = ["#00E5FF", "#FF006E", "#39FF14", "#FFD600"];
+    const colors = ["#00E5FF", "#3a6a88", "#5a8a6a", "#8a7a40"];
     const tex = makeBillboardTexture(titles[index % titles.length], colors[index % colors.length]);
     const board = new THREE.Mesh(
       new THREE.PlaneGeometry(10, 5),

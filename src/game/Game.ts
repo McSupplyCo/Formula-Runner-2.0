@@ -1,14 +1,13 @@
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { GameAudio } from "./audio";
-import { CAMERA, CARS, DRIVE, ROAD, SPAWN, type CarId } from "./tuning";
 import { hits, nearMissClearance } from "./collision";
 import { InputController } from "./input";
 import { clamp, damp, formatDistance, formatScore, laneCenter } from "./math";
-import {
-  materializePattern,
-  pickPattern,
-  type TrafficCar,
-} from "./patterns";
+import { materializePattern, pickPattern, type TrafficCar } from "./patterns";
 import { applyUnlocks, commitRun, loadSave, writeSave, type SaveData } from "./save";
 import {
   difficultyAt,
@@ -19,8 +18,10 @@ import {
   tickCombo,
 } from "./scoring";
 import { emptyRun, type GameMode, type RunStats } from "./state";
+import { BLOOM, CAMERA, CARS, CHASSIS, DRIVE, ROAD, SPAWN, type CarId } from "./tuning";
 import { createFormulaCar, createTrafficCar } from "./vehicles";
 import { TrackWorld, zoneAt } from "./world";
+import { makeNightEnv } from "./env";
 
 type Toast = { text: string; life: number; color: string };
 
@@ -44,14 +45,30 @@ export class Game {
   private trafficMeshes = new Map<TrafficCar, THREE.Object3D>();
   private meshPool = new Map<TrafficCar["kind"], THREE.Object3D[]>();
   private player = { x: 0, z: 0, vx: 0, speed: 0, yaw: 0 };
+  private chassis = { pitch: 0, roll: 0, y: 0, vy: 0 };
   private spawnClock = 0.6;
   private countdown = 0;
   private crashTimer = 0;
   private shake = 0;
   private clock = new THREE.Clock();
+  private prevSpeed = 0;
+  private boostPunch = 0;
+  private fovKick = 0;
+  private land = 0;
+  private camRoll = 0;
   private camPos = new THREE.Vector3(0, CAMERA.height, -CAMERA.back);
   private look = new THREE.Vector3();
+  private desiredCam = new THREE.Vector3();
+  private lookMat = new THREE.Matrix4();
+  private camQuat = new THREE.Quaternion();
+  private trailTip = new THREE.Vector3();
+  private trailHistory: THREE.Vector3[] = [];
   private speedLines: THREE.Points;
+  private boostTrail: THREE.Line;
+  private boostGlow: THREE.Mesh;
+  private boostLight: THREE.PointLight;
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
   private ui: Record<string, HTMLElement>;
   private frames = 0;
   private fpsAccum = 0;
@@ -63,13 +80,23 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.35;
+    this.renderer.toneMappingExposure = BLOOM.exposure;
+    this.scene.environment = makeNightEnv(this.renderer);
+    this.scene.environmentIntensity = 0.85;
 
     this.world = new TrackWorld(this.scene);
     this.playerMesh = createFormulaCar(CARS[0].color, CARS[0].accent);
     this.scene.add(this.playerMesh);
     this.speedLines = this.makeSpeedLines();
+    this.speedLines.visible = false;
     this.scene.add(this.speedLines);
+    this.boostTrail = this.makeBoostTrail();
+    this.scene.add(this.boostTrail);
+    this.boostGlow = this.makeBoostGlow();
+    this.scene.add(this.boostGlow);
+    this.boostLight = new THREE.PointLight(0x66f0ff, 0, 9, 2);
+    this.scene.add(this.boostLight);
+    this.setupBloom();
 
     this.input.attach(canvas);
     this.bindUi();
@@ -77,6 +104,9 @@ export class Game {
     window.addEventListener("resize", this.resize);
     document.addEventListener("visibilitychange", this.onVisibility);
     this.renderTitle();
+    this.resetFeel();
+    this.world.update(0, 0);
+    this.sync(0.016);
     this.tick();
   }
 
@@ -92,6 +122,7 @@ export class Game {
     this.crashTimer = 0;
     this.shake = 0;
     this.lastBest = false;
+    this.resetFeel();
     this.mode = "countdown";
     this.audio.startEngine();
     this.setVisible("title", false);
@@ -114,13 +145,20 @@ export class Game {
       this.fpsAccum = 0;
     }
     if (!this.hidden) this.simulate(dt);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
   };
 
   private simulate(dt: number) {
     const input = this.input.consume();
     if (input.pause && this.mode === "playing") this.setPause(true);
     else if (input.pause && this.mode === "paused") this.setPause(false);
+
+    if (this.mode === "title" || this.mode === "results") {
+      this.world.update(this.player.z, this.mode === "title" ? 0 : this.run.distance);
+      this.sync(dt);
+      return;
+    }
 
     if (this.mode === "countdown") {
       this.countdown -= dt;
@@ -152,7 +190,6 @@ export class Game {
 
     if (this.mode === "crashed") {
       this.crashTimer -= dt;
-      this.shake = Math.max(0, this.crashTimer);
       this.world.update(this.player.z, this.run.distance);
       this.sync(dt);
       if (this.crashTimer <= 0) this.openResults();
@@ -175,8 +212,10 @@ export class Game {
     this.player.vx = damp(this.player.vx, steer * car.steer * authority, car.grip, dt);
     this.player.x = clamp(this.player.x + this.player.vx * dt, -ROAD.driveLimit, ROAD.driveLimit);
     this.player.z += (this.player.speed / 3.6) * dt;
-    this.player.yaw = damp(this.player.yaw, steer * 10, 10, dt);
+    this.player.yaw = damp(this.player.yaw, steer * DRIVE.visualYaw, 10, dt);
     this.run.speed = this.player.speed;
+    this.updateChassis(dt, steer, brake);
+    this.prevSpeed = this.player.speed;
     if (!scoring) return;
 
     const combo = tickCombo(this.run.combo, this.run.comboTimer, dt);
@@ -185,7 +224,31 @@ export class Game {
     const dz = (this.player.speed / 3.6) * dt;
     this.run.distance += dz;
     this.run.score += distanceScore(dz, this.player.speed, car.topSpeed);
-    this.player.x = clamp(this.player.x, -ROAD.driveLimit, ROAD.driveLimit);
+  }
+
+  private updateChassis(dt: number, steer: number, brake: number) {
+    const motion = this.save.reducedMotion ? 0.28 : 1;
+    const accel = (this.player.speed - this.prevSpeed) / Math.max(dt, 1 / 120);
+    const pitchAccel = clamp(-accel * CHASSIS.pitchAccel, -CHASSIS.pitchMax, CHASSIS.pitchMax);
+    const pitchBrake = brake > 0.2 ? CHASSIS.pitchBrake : 0;
+    const pitchBoost = this.run.boosting ? -CHASSIS.pitchBoost : 0;
+    const targetPitch = (pitchAccel + pitchBrake + pitchBoost) * motion;
+    const targetRoll = clamp(
+      (-this.player.vx * CHASSIS.rollVx - steer * 0.04) * motion,
+      -CHASSIS.rollMax,
+      CHASSIS.rollMax,
+    );
+    this.chassis.pitch = damp(this.chassis.pitch, targetPitch, CHASSIS.damp + 2, dt);
+    this.chassis.roll = damp(this.chassis.roll, targetRoll, CHASSIS.damp + 4, dt);
+
+    const targetY = this.run.boosting ? -CHASSIS.squat : 0;
+    this.chassis.vy += (targetY - this.chassis.y) * CHASSIS.spring * dt;
+    this.chassis.vy -= this.chassis.vy * CHASSIS.damp * dt;
+    const prevY = this.chassis.y;
+    this.chassis.y = clamp(this.chassis.y + this.chassis.vy * dt, -0.16, 0.08);
+    if (prevY < -0.03 && this.chassis.vy > 0.55) {
+      this.land = Math.max(this.land, clamp(this.chassis.vy * 0.4, 0, 1));
+    }
   }
 
   private updateTraffic(dt: number) {
@@ -267,7 +330,7 @@ export class Game {
     this.pushToast(`NEAR MISS ×${this.run.combo}`, "#39FF14");
     this.audio.playNearMiss(this.run.combo);
     this.buzz(12);
-    this.shake = Math.max(this.shake, 0.16);
+    this.shake = Math.max(this.shake, 0.03);
   }
 
   private awardOvertake(lateral: number) {
@@ -283,6 +346,8 @@ export class Game {
   private tryBoost() {
     if (this.mode !== "playing" || this.run.boosting || this.run.boost < DRIVE.boostMinCharge) return;
     this.run.boosting = true;
+    this.fovKick = Math.max(this.fovKick, CAMERA.fovBoostExtra);
+    this.chassis.vy -= 1.55;
     this.audio.playBoost();
     this.buzz(18);
   }
@@ -292,7 +357,7 @@ export class Game {
     this.mode = "crashed";
     this.crashTimer = 0.85;
     this.run.boosting = false;
-    this.shake = 0.65;
+    this.shake = 0.14;
     this.audio.playCrash();
     this.buzz(40);
   }
@@ -322,47 +387,151 @@ export class Game {
   }
 
   private sync(dt: number) {
-    this.playerMesh.position.set(this.player.x, 0, this.player.z);
-    this.playerMesh.rotation.y = THREE.MathUtils.degToRad(-this.player.yaw);
-    this.playerMesh.rotation.z = THREE.MathUtils.degToRad(-this.player.vx * 0.55);
-    for (const car of this.traffic) {
-      this.trafficMeshes.get(car)?.position.set(car.x, 0, car.z);
-    }
-
-    const t = clamp(this.player.speed / 260, 0, 1);
-    const extra = this.run.boosting && !this.save.reducedMotion ? CAMERA.fovBoostExtra : 0;
-    this.camera.fov = THREE.MathUtils.damp(
-      this.camera.fov,
-      CAMERA.fovIdle + (CAMERA.fovFast - CAMERA.fovIdle) * t + extra,
-      5,
-      dt,
+    this.playerMesh.position.set(this.player.x, this.chassis.y, this.player.z);
+    this.playerMesh.rotation.set(
+      this.chassis.pitch,
+      THREE.MathUtils.degToRad(-this.player.yaw),
+      this.chassis.roll,
     );
-    this.camera.updateProjectionMatrix();
-    const desired = new THREE.Vector3(this.player.x * 0.32, CAMERA.height, this.player.z - CAMERA.back - t);
-    this.camPos.lerp(desired, 1 - Math.exp(-CAMERA.follow * dt));
-    if (!this.save.reducedMotion && this.shake > 0) {
-      this.shake = Math.max(0, this.shake - dt);
-      this.camPos.x += (Math.random() - 0.5) * this.shake * 0.7;
+    for (const car of this.traffic) {
+      const mesh = this.trafficMeshes.get(car);
+      if (!mesh) continue;
+      mesh.position.set(car.x, 0, car.z);
+      this.spinWheels(mesh, car.speed, dt);
     }
-    this.camera.position.copy(this.camPos);
-    this.look.set(this.player.x * 0.18, 0.65, this.player.z + CAMERA.lookAhead);
-    this.camera.lookAt(this.look);
-
-    const pos = this.speedLines.geometry.getAttribute("position");
-    for (let i = 0; i < pos.count; i++) {
-      let z = pos.getZ(i) - this.player.speed * dt * 0.1;
-      if (z < -16) z = 36 + Math.random() * 24;
-      pos.setXYZ(i, this.player.x + (Math.random() - 0.5) * 7, 0.5 + Math.random() * 2, this.player.z + z);
-    }
-    pos.needsUpdate = true;
-    this.speedLines.visible =
-      !this.save.reducedMotion && this.player.speed > 140 && this.mode === "playing";
-
+    this.spinWheels(this.playerMesh, this.player.speed, dt);
+    this.updateCamera(dt);
+    this.updateBoostFx(dt);
+    this.updateSpeedLines(dt);
     this.toasts = this.toasts.filter((toast) => {
       toast.life -= dt;
       return toast.life > 0;
     });
     this.updateHud();
+  }
+
+  private spinWheels(root: THREE.Object3D, speedKph: number, dt: number) {
+    const v = speedKph / 3.6;
+    root.traverse((obj) => {
+      if (!obj.userData.spin) return;
+      const radius = Number(obj.userData.radius) || 0.32;
+      obj.rotation.x += (v / radius) * dt;
+    });
+  }
+
+  private updateCamera(dt: number) {
+    const reduced = this.save.reducedMotion;
+    const speedT = clamp(this.player.speed / 260, 0, 1);
+    const punchHold = this.run.boosting && !reduced ? 0.38 : 0;
+    this.boostPunch = damp(this.boostPunch, punchHold, 7.5, dt);
+    this.fovKick = Math.max(0, this.fovKick - dt * 14);
+    this.land = Math.max(0, this.land - dt * 3.6);
+    const punch = reduced ? 0 : this.boostPunch;
+    const land = reduced ? 0 : this.land;
+    const extra = this.run.boosting && !reduced ? CAMERA.fovBoostExtra : 0;
+    const targetFov =
+      CAMERA.fovIdle + (CAMERA.fovFast - CAMERA.fovIdle) * speedT + extra + (reduced ? 0 : this.fovKick);
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 6.2, dt);
+    this.camera.updateProjectionMatrix();
+
+    this.desiredCam.set(
+      this.player.x * 0.26,
+      CAMERA.height + speedT * 0.1 + this.chassis.y * 0.42 - punch * 0.16 - land * CAMERA.landDrop,
+      this.player.z - CAMERA.back - speedT * 1.05 - punch * CAMERA.boostPunch,
+    );
+    this.camPos.x = damp(this.camPos.x, this.desiredCam.x, CAMERA.lag, dt);
+    this.camPos.y = damp(this.camPos.y, this.desiredCam.y, CAMERA.follow, dt);
+    this.camPos.z = damp(this.camPos.z, this.desiredCam.z, CAMERA.follow * 1.2, dt);
+
+    if (!reduced && this.shake > 0) {
+      this.shake = Math.max(0, this.shake - dt * 2.4);
+      const t = this.clock.elapsedTime;
+      const hit = this.shake * CAMERA.shakeMax * 4;
+      this.camPos.x += Math.sin(t * 9.4) * hit;
+      this.camPos.y += Math.cos(t * 7.1) * hit * 0.35;
+    }
+
+    this.look.set(
+      this.player.x * 0.16 + this.chassis.roll * 1.4,
+      CAMERA.lookHeight + speedT * 0.06 - land * 0.18,
+      this.player.z + CAMERA.lookAhead + speedT * 2.2 + punch * 1.4,
+    );
+    this.lookMat.lookAt(this.camPos, this.look, this.camera.up);
+    this.camQuat.setFromRotationMatrix(this.lookMat);
+    const rollTarget = reduced ? 0 : this.chassis.roll * 0.55 + this.player.vx * CAMERA.steerRoll;
+    this.camRoll = damp(this.camRoll, rollTarget, 10, dt);
+    this.camera.position.copy(this.camPos);
+    this.camera.quaternion.copy(this.camQuat);
+    this.camera.rotateZ(this.camRoll);
+  }
+
+  private updateBoostFx(dt: number) {
+    const live = this.run.boosting && this.mode === "playing" && !this.save.reducedMotion;
+    const trailMat = this.boostTrail.material as THREE.LineBasicMaterial;
+    const glowMat = this.boostGlow.material as THREE.MeshBasicMaterial;
+    trailMat.opacity = damp(trailMat.opacity, live ? 0.55 : 0, 10, dt);
+    glowMat.opacity = damp(glowMat.opacity, live ? 0.28 : 0, 9, dt);
+    this.boostLight.intensity = damp(this.boostLight.intensity, live ? 1.35 : 0, 8, dt);
+
+    this.trailTip.set(this.player.x, 0.32 + this.chassis.y, this.player.z - 1.35);
+    if (this.trailHistory.length === 0 || this.trailHistory[0].distanceToSquared(this.trailTip) > 0.04) {
+      const slot = this.trailHistory.length < 22 ? new THREE.Vector3() : this.trailHistory.pop()!;
+      slot.copy(this.trailTip);
+      this.trailHistory.unshift(slot);
+    } else {
+      this.trailHistory[0].copy(this.trailTip);
+    }
+    const pos = this.boostTrail.geometry.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) {
+      const src = this.trailHistory[Math.min(i, Math.max(0, this.trailHistory.length - 1))] ?? this.trailTip;
+      pos.setXYZ(i, src.x, src.y, src.z);
+    }
+    pos.needsUpdate = true;
+    this.boostTrail.geometry.computeBoundingSphere();
+    this.boostTrail.visible = trailMat.opacity > 0.02;
+    this.boostGlow.visible = glowMat.opacity > 0.02;
+    this.boostGlow.position.set(this.player.x, 0.36 + this.chassis.y, this.player.z - 2.05);
+    this.boostGlow.scale.set(live ? 0.85 : 0.5, live ? 0.85 : 0.5, 1 + this.boostPunch * 0.55);
+    this.boostLight.position.copy(this.boostGlow.position);
+  }
+
+  private resetFeel() {
+    this.chassis = { pitch: 0, roll: 0, y: 0, vy: 0 };
+    this.boostPunch = 0;
+    this.fovKick = 0;
+    this.land = 0;
+    this.camRoll = 0;
+    this.prevSpeed = this.player.speed;
+    this.shake = 0;
+    this.trailHistory = [];
+    this.camPos.set(this.player.x * 0.26, CAMERA.height, this.player.z - CAMERA.back);
+    this.camera.fov = CAMERA.fovIdle;
+    this.camera.updateProjectionMatrix();
+    (this.boostTrail.material as THREE.LineBasicMaterial).opacity = 0;
+    (this.boostGlow.material as THREE.MeshBasicMaterial).opacity = 0;
+    this.boostLight.intensity = 0;
+    this.boostTrail.visible = false;
+    this.boostGlow.visible = false;
+  }
+
+  private setupBloom() {
+    try {
+      const composer = new EffectComposer(this.renderer);
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      const bloom = new UnrealBloomPass(
+        new THREE.Vector2(1, 1),
+        BLOOM.strength,
+        BLOOM.radius,
+        BLOOM.threshold,
+      );
+      composer.addPass(bloom);
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+      this.bloomPass = bloom;
+    } catch {
+      this.composer = null;
+      this.bloomPass = null;
+    }
   }
 
   private acquire(kind: TrafficCar["kind"]) {
@@ -385,16 +554,95 @@ export class Game {
   }
 
   private makeSpeedLines() {
-    const count = 64;
+    const count = 42;
     const array = new Float32Array(count * 3);
+    const streaks = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      streaks[i * 3] = (Math.random() - 0.5) * 8;
+      streaks[i * 3 + 1] = 0.4 + Math.random() * 2;
+      streaks[i * 3 + 2] = -12 + Math.random() * 40;
+    }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(array, 3));
     const points = new THREE.Points(
       geo,
-      new THREE.PointsMaterial({ color: 0x8befff, size: 0.08, transparent: true, opacity: 0.5, depthWrite: false }),
+      new THREE.PointsMaterial({
+        color: 0x9af4ff,
+        size: 0.07,
+        transparent: true,
+        opacity: 0.34,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
     );
+    points.userData.streaks = streaks;
     points.visible = false;
+    points.frustumCulled = false;
     return points;
+  }
+
+  private updateSpeedLines(dt: number) {
+    const live = this.run.boosting && this.mode === "playing" && !this.save.reducedMotion;
+    const mat = this.speedLines.material as THREE.PointsMaterial;
+    mat.opacity = damp(mat.opacity, live ? 0.2 : 0, 8, dt);
+    this.speedLines.visible = mat.opacity > 0.02;
+    if (!this.speedLines.visible) return;
+    const streaks = this.speedLines.userData.streaks as Float32Array;
+    const pos = this.speedLines.geometry.getAttribute("position");
+    const vz = this.player.speed / 3.6;
+    for (let i = 0; i < pos.count; i++) {
+      streaks[i * 3 + 2] -= vz * dt * 1.6;
+      if (streaks[i * 3 + 2] < -14) {
+        streaks[i * 3] = (Math.random() - 0.5) * 7;
+        streaks[i * 3 + 1] = 0.35 + Math.random() * 1.8;
+        streaks[i * 3 + 2] = 10 + Math.random() * 18;
+      }
+      pos.setXYZ(
+        i,
+        this.player.x + streaks[i * 3],
+        0.45 + this.chassis.y + streaks[i * 3 + 1],
+        this.player.z + streaks[i * 3 + 2],
+      );
+    }
+    pos.needsUpdate = true;
+  }
+
+  private makeBoostTrail() {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(22 * 3), 3));
+    const line = new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({
+        color: 0x66f7ff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    line.visible = false;
+    line.frustumCulled = false;
+    return line;
+  }
+
+  private makeBoostGlow() {
+    const geo = new THREE.ConeGeometry(0.12, 1.85, 8, 1, true);
+    geo.rotateX(-Math.PI / 2);
+    const glow = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        color: 0x7cf7ff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        fog: false,
+      }),
+    );
+    glow.visible = false;
+    glow.frustumCulled = false;
+    return glow;
   }
 
   private pushToast(text: string, color: string) {
@@ -409,6 +657,7 @@ export class Game {
   private updateHud() {
     if (this.mode !== "playing" && this.mode !== "countdown" && this.mode !== "paused") return;
     this.ui.speed.textContent = String(Math.round(this.run.speed));
+    if (this.ui.gear) this.ui.gear.textContent = this.gearLabel(this.run.speed);
     this.ui.distance.textContent = formatDistance(this.run.distance);
     this.ui.score.textContent = formatScore(this.run.score);
     this.ui.combo.textContent = this.run.combo > 0 ? `×${this.run.combo}` : "";
@@ -419,6 +668,15 @@ export class Game {
     this.ui.toast.innerHTML = this.toasts
       .map((toast) => `<div style="color:${toast.color}">${toast.text}</div>`)
       .join("");
+  }
+
+  private gearLabel(speed: number) {
+    if (speed < 70) return "2";
+    if (speed < 120) return "3";
+    if (speed < 165) return "4";
+    if (speed < 210) return "5";
+    if (speed < 250) return "6";
+    return "7";
   }
 
   private renderTitle() {
@@ -506,6 +764,7 @@ export class Game {
     this.setVisible("countdown", false);
     this.setVisible("title", true);
     this.player = { x: 0, z: 0, vx: 0, speed: 0, yaw: 0 };
+    this.resetFeel();
     this.world.update(0, 0);
     this.sync(0.016);
   }
@@ -519,9 +778,13 @@ export class Game {
   }
 
   private resize = () => {
-    this.camera.aspect = innerWidth / innerHeight;
+    const w = innerWidth;
+    const h = Math.max(1, innerHeight);
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(innerWidth, innerHeight);
+    this.renderer.setSize(w, h);
+    this.composer?.setSize(w, h);
+    this.bloomPass?.setSize(w, h);
   };
 
   private onVisibility = () => {
