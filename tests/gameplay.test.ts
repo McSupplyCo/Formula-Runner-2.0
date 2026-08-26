@@ -8,6 +8,12 @@ import {
   migrateSave,
 } from "../src/game/save";
 import {
+  buyCar,
+  buyPart,
+  creditPayout,
+  fittedSpec,
+} from "../src/game/garage";
+import {
   difficultyAt,
   distanceScore,
   nearMissScore,
@@ -17,7 +23,19 @@ import {
   tickCombo,
 } from "../src/game/scoring";
 import { emptyRun } from "../src/game/state";
-import { ROAD } from "../src/game/tuning";
+import { BLOOM, CAMERA, CHASSIS, ROAD } from "../src/game/tuning";
+
+describe("camera feel tuning", () => {
+  it("keeps chase camera contract names", () => {
+    expect(CAMERA.fovIdle).toBeLessThan(CAMERA.fovFast);
+    expect(CAMERA.follow).toBeGreaterThan(CAMERA.lag);
+    expect(CAMERA.fovBoostExtra).toBeGreaterThan(0);
+    expect(CAMERA.height).toBeGreaterThan(0);
+    expect(CAMERA.back).toBeGreaterThan(0);
+    expect(BLOOM.threshold).toBeGreaterThan(0.5);
+    expect(CHASSIS.rollMax).toBeLessThan(0.5);
+  });
+});
 
 describe("scoring", () => {
   it("increases score with speed", () => {
@@ -57,25 +75,59 @@ describe("scoring", () => {
 
 describe("save migration", () => {
   it("creates defaults from empty data", () => {
-    expect(migrateSave(null).version).toBe(2);
+    expect(migrateSave(null).version).toBe(3);
     expect(migrateSave({}).selectedCar).toBe("apex");
+    expect(migrateSave({}).credits).toBe(0);
+    expect(migrateSave({}).ownedCars).toEqual(["apex"]);
   });
 
   it("keeps a v1 best distance", () => {
     const next = migrateSave({ bestDistance: 1400, version: 1 });
     expect(next.bestDistance).toBe(1400);
-    expect(next.version).toBe(2);
+    expect(next.version).toBe(3);
+    expect(next.ownedCars).toEqual(["apex"]);
   });
 
-  it("unlocks cars from personal best", () => {
-    const save = commitRun(defaultSave(), { score: 9000, distance: 2300, combo: 4 });
-    expect(save.unlockedCars).toContain("drift");
-    expect(save.unlockedCars).toContain("surge");
+  it("does not gift cars on a long run", () => {
+    const save = commitRun(defaultSave(), { score: 9000, distance: 2300, combo: 4, nearMisses: 2, overtakes: 1 });
+    expect(save.ownedCars).toEqual(["apex"]);
     expect(save.bestDistance).toBe(2300);
+    expect(save.credits).toBeGreaterThan(0);
   });
 
   it("falls back from unknown car ids", () => {
     expect(migrateSave({ selectedCar: "ferrari" }).selectedCar).toBe("apex");
+  });
+});
+
+describe("garage", () => {
+  it("pays more credits for near misses and a personal best", () => {
+    const short = creditPayout({ distance: 200, nearMisses: 0, overtakes: 0, personalBest: false });
+    const rich = creditPayout({ distance: 200, nearMisses: 3, overtakes: 2, personalBest: true });
+    expect(rich).toBeGreaterThan(short);
+  });
+
+  it("buys one part rank and refuses if broke", () => {
+    const broke = buyPart(defaultSave(), "apex", "power");
+    expect(broke.ok).toBe(false);
+    const funded = { ...defaultSave(), credits: 200 };
+    const bought = buyPart(funded, "apex", "power");
+    expect(bought.ok).toBe(true);
+    expect(bought.save.garage.apex.power).toBe(1);
+    expect(bought.save.credits).toBe(80);
+    expect(fittedSpec(bought.save, "apex").accel).toBeGreaterThan(fittedSpec(funded, "apex").accel);
+  });
+
+  it("requires distance and credits before selling Drift", () => {
+    const early = buyCar(defaultSave(), "drift");
+    expect(early.ok).toBe(false);
+    const far = buyCar({ ...defaultSave(), bestDistance: 900, credits: 100 }, "drift");
+    expect(far.ok).toBe(false);
+    const paid = buyCar({ ...defaultSave(), bestDistance: 900, credits: 800 }, "drift");
+    expect(paid.ok).toBe(true);
+    expect(paid.save.ownedCars).toContain("drift");
+    expect(paid.save.credits).toBe(0);
+    expect(paid.save.garage.drift.power).toBe(0);
   });
 });
 

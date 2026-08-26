@@ -3,70 +3,125 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Formula Runner 2.0</title>
+    <title>Formula Runner</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <canvas id="view"></canvas>
-    <div id="ui">
-      <section id="title" class="screen">
-        <p class="kicker">Formula Runner 2.0</p>
-        <h1>Floor it.<br />Don't stop.</h1>
-        <p class="best" id="best">0 · 0 m</p>
-        <div id="cars" class="cars"></div>
-        <button id="play" class="primary">Race</button>
-        <button id="openSettings" class="ghost">Settings</button>
-        <p class="help">A/D or arrows to steer · S to brake · Space to boost · Esc pause<br />On touch: drag to steer</p>
-      </section>
-
-      <section id="hud" class="hud hidden">
-        <div class="hud-left">
-          <div class="speed"><span id="speed">0</span><small>KPH</small></div>
-          <div class="boost"><span id="boostFill"></span></div>
+    <div id="app" class="app" data-panel="title">
+      <aside id="shell" class="rail">
+        <div class="rail-head">
+          <header class="brand">
+            <span>Midnight Voltage</span>
+            <strong>Formula Runner</strong>
+          </header>
+          <nav class="nav">
+            <button id="navHome" class="nav-btn is-active" type="button">Home</button>
+            <button id="openGarage" class="nav-btn" type="button">Garage</button>
+            <button id="openSettings" class="nav-btn" type="button">Settings</button>
+          </nav>
+          <dl class="shell-stats">
+            <div><dt>Best</dt><dd id="statScore">0</dd></div>
+            <div><dt>Distance</dt><dd id="statDistance">0 m</dd></div>
+            <div><dt>Credits</dt><dd id="statCredits">0 cr</dd></div>
+          </dl>
         </div>
-        <div class="hud-right">
-          <div id="score">0</div>
-          <div id="distance">0 m</div>
-          <div id="zone">Harbor Lights</div>
-          <button id="pauseHud" class="ghost hud-pause">Pause</button>
+
+        <div class="rail-body">
+        <section id="title" class="panel">
+          <p class="kicker">Select car</p>
+          <div id="cars" class="cars"></div>
+          <div class="panel-foot">
+            <button id="play" class="primary" type="button">Race</button>
+            <p class="help">A/D or arrows to steer · S brake · Space boost · Esc pause</p>
+          </div>
+        </section>
+
+        <section id="garage" class="panel hidden">
+          <header class="panel-head">
+            <div>
+              <p class="kicker">Garage</p>
+              <h2>Setup</h2>
+            </div>
+            <p id="garageCredits" class="wallet">0 cr</p>
+          </header>
+          <p class="section-label">Cars</p>
+          <div id="garageCars" class="cars"></div>
+          <p class="section-label">Parts</p>
+          <div id="garageParts" class="parts"></div>
+          <p class="section-label">Livery</p>
+          <div id="garageLiveries" class="liveries"></div>
+          <p id="garageHint" class="hint">Race to earn credits, then spend them one rank at a time.</p>
+          <button id="closeGarage" class="ghost" type="button">Back to home</button>
+        </section>
+
+        <section id="results" class="panel hidden">
+          <p class="kicker" id="resultBest">Run complete</p>
+          <h2 id="resultScore">0</h2>
+          <dl class="metrics">
+            <div><dt>Distance</dt><dd id="resultDistance">0 m</dd></div>
+            <div><dt>Near misses</dt><dd id="resultNear">0</dd></div>
+            <div><dt>Overtakes</dt><dd id="resultPass">0</dd></div>
+            <div><dt>Max combo</dt><dd id="resultCombo">×0</dd></div>
+          </dl>
+          <p id="resultCredits" class="wallet">+0 cr</p>
+          <button id="again" class="primary" type="button">Race again</button>
+          <button id="openGarageResults" class="ghost" type="button">Open garage</button>
+          <button id="menu" class="text-btn" type="button">Home</button>
+        </section>
+
+        <section id="settings" class="panel hidden">
+          <p class="kicker">Preferences</p>
+          <h2>Settings</h2>
+          <label class="setting"><span>Sound</span><input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
+          <label class="setting"><span>Music</span><input id="music" type="range" min="0" max="1" step="0.01" /></label>
+          <label class="setting check"><span>Reduced motion</span><input id="motion" type="checkbox" /></label>
+          <label class="setting check"><span>Haptics</span><input id="haptics" type="checkbox" /></label>
+          <button id="closeSettings" class="ghost" type="button">Done</button>
+        </section>
         </div>
-        <div id="combo" class="combo"></div>
-        <div id="toast" class="toast"></div>
-      </section>
+      </aside>
 
-      <div id="countdown" class="countdown hidden">3</div>
-
-      <section id="pause" class="screen overlay hidden">
-        <h2>Paused</h2>
-        <button id="resume" class="primary">Resume</button>
-        <button id="quit" class="ghost">Quit to title</button>
-      </section>
-
-      <section id="results" class="screen overlay hidden">
-        <p class="kicker" id="resultBest">Run complete</p>
-        <h2 id="resultScore">0</h2>
-        <p id="resultStats"></p>
-        <button id="again" class="primary">Race again</button>
-        <button id="menu" class="ghost">Title</button>
-      </section>
-
-      <section id="settings" class="screen overlay hidden">
-        <h2>Settings</h2>
-        <label>SFX <input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
-        <label>Music <input id="music" type="range" min="0" max="1" step="0.01" /></label>
-        <label class="check"><input id="motion" type="checkbox" /> Reduced motion</label>
-        <label class="check"><input id="haptics" type="checkbox" /> Haptics</label>
-        <button id="closeSettings" class="primary">Done</button>
-      </section>
-
-      <div id="touch" class="touch hidden">
-        <button id="brakeBtn">Brake</button>
-        <button id="boostBtn">Boost</button>
-      </div>
+      <main id="stage" class="stage">
+        <div class="stage-chrome">
+          <span id="stageLabel">Harbor Lights</span>
+          <span id="stageMode">Preview</span>
+        </div>
+        <div id="viewport" class="viewport">
+        <canvas id="view"></canvas>
+        <section id="hud" class="hud hidden">
+          <div class="hud-left cluster">
+            <div class="speed"><span id="speed">0</span><small>KPH</small></div>
+            <div class="gear-row"><span>Gear</span><b id="gear">N</b></div>
+            <div class="boost" aria-label="Boost"><span id="boostFill"></span></div>
+          </div>
+          <div class="hud-right cluster">
+            <div id="score">0</div>
+            <div id="distance">0 m</div>
+            <div id="zone">Harbor Lights</div>
+            <button id="pauseHud" class="text-btn hud-pause" type="button">Pause</button>
+          </div>
+          <div id="combo" class="combo"></div>
+          <div id="toast" class="toast"></div>
+        </section>
+        <div id="countdown" class="countdown hidden">3</div>
+        <section id="pause" class="stage-modal hidden">
+          <div class="modal">
+            <p class="kicker">Paused</p>
+            <h2>Take a breath</h2>
+            <button id="resume" class="primary" type="button">Resume</button>
+            <button id="quit" class="ghost" type="button">Quit to home</button>
+          </div>
+        </section>
+        <div id="touch" class="touch hidden">
+          <button id="brakeBtn" type="button">Brake</button>
+          <button id="boostBtn" type="button">Boost</button>
+        </div>
+        </div>
+      </main>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
