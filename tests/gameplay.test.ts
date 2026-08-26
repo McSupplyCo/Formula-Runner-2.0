@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { aabbOverlap, clamp, laneCenter, sweptOverlap } from "../src/game/math";
+import { aabbOverlap, clamp, headingOffset, laneCenter, sweptOverlap } from "../src/game/math";
 import { hits, hitsBarrier } from "../src/game/collision";
-import { openLanes, PATTERNS, pickPattern } from "../src/game/patterns";
+import { openLanes, PATTERNS, patternPoolAt, pickPattern } from "../src/game/patterns";
 import {
   commitRun,
   defaultSave,
@@ -24,6 +24,7 @@ import {
 } from "../src/game/scoring";
 import { emptyRun } from "../src/game/state";
 import { BLOOM, CAMERA, CHASSIS, ROAD } from "../src/game/tuning";
+import { CITY_BEHIND, CITY_SPAN, recycleCityZ } from "../src/game/world";
 
 describe("camera feel tuning", () => {
   it("keeps chase camera contract names", () => {
@@ -32,6 +33,7 @@ describe("camera feel tuning", () => {
     expect(CAMERA.fovBoostExtra).toBeGreaterThan(0);
     expect(CAMERA.height).toBeGreaterThan(0);
     expect(CAMERA.back).toBeGreaterThan(0);
+    expect(CAMERA.yawLook).toBeGreaterThan(CAMERA.yawCam);
     expect(BLOOM.threshold).toBeGreaterThan(0.5);
     expect(CHASSIS.rollMax).toBeLessThan(0.5);
   });
@@ -166,9 +168,21 @@ describe("traffic patterns", () => {
     }
   });
 
+  it("keeps every early pattern at distance 0", () => {
+    const pool = patternPoolAt(0);
+    expect(pool.length).toBeGreaterThan(0);
+    expect(pool.every((pattern) => pattern.minDistance === 0)).toBe(true);
+  });
+
+  it("drops easy patterns from the late-game pool", () => {
+    const names = patternPoolAt(2000).map((pattern) => pattern.name);
+    expect(names).not.toContain("single");
+  });
+
   it("only picks eligible patterns", () => {
     const early = pickPattern(0, () => 0);
     expect(early.minDistance).toBe(0);
+    expect(patternPoolAt(0).some((pattern) => pattern.name === early.name)).toBe(true);
   });
 
   it("places lane centers inside the road", () => {
@@ -186,6 +200,32 @@ describe("state", () => {
   });
 });
 
+describe("city recycle", () => {
+  it("jumps a building behind the player forward by span, not backward", () => {
+    const next = recycleCityZ(10, 200);
+    expect(next).toBe(10 + CITY_SPAN);
+    expect(next).toBeGreaterThan(200);
+    expect(next).toBeGreaterThan(10);
+    expect(next).not.toBe(10 - CITY_SPAN);
+  });
+
+  it("does not wrap a building already ahead backward", () => {
+    expect(recycleCityZ(400, 0)).toBe(400);
+  });
+
+  it("is stable when called twice and never ping-pongs as playerZ increases", () => {
+    let z = 10;
+    for (let playerZ = 0; playerZ <= 2400; playerZ += 40) {
+      const once = recycleCityZ(z, playerZ);
+      const twice = recycleCityZ(once, playerZ);
+      expect(twice).toBe(once);
+      expect(once).toBeGreaterThanOrEqual(z);
+      expect(once).toBeGreaterThanOrEqual(playerZ - CITY_BEHIND);
+      z = once;
+    }
+  });
+});
+
 describe("math", () => {
   it("clamps and sweeps conservatively", () => {
     expect(clamp(5, 0, 3)).toBe(3);
@@ -197,5 +237,17 @@ describe("math", () => {
         0,
       ),
     ).toBe(true);
+  });
+
+  it("steps along heading instead of strafing", () => {
+    const straight = headingOffset(0, 10);
+    expect(straight.x).toBeCloseTo(0);
+    expect(straight.z).toBeCloseTo(10);
+    const right = headingOffset(0.2, 10);
+    expect(right.x).toBeGreaterThan(0);
+    expect(right.z).toBeLessThan(10);
+    const left = headingOffset(-0.2, 10);
+    expect(left.x).toBeCloseTo(-right.x);
+    expect(left.z).toBeCloseTo(right.z);
   });
 });

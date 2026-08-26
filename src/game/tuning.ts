@@ -75,9 +75,12 @@ export type CarId = (typeof CARS)[number]["id"];
 
 export const DRIVE = {
   startSpeed: 72,
+  minSpeed: 24,
   coastDecel: 8,
-  highSpeedSteerLoss: 0.22,
-  visualYaw: 10,
+  highSpeedSteerLoss: 0.68,
+  yawPerSteer: 0.011,
+  yawSnap: 0.62,
+  yawReturn: 0.34,
   hitchMaxDt: 1 / 20,
   boostMultiplier: 1.26,
   boostDrain: 0.42,
@@ -87,14 +90,14 @@ export const DRIVE = {
   playerWidth: 1.72,
   trafficLength: 4.3,
   trafficWidth: 1.85,
-  hitboxScale: 0.86,
+  hitboxScale: 0.9,
 } as const;
 
 export const SPAWN = {
-  minLookahead: 150,
-  lookaheadSeconds: 1.9,
+  minLookahead: 110,
+  lookaheadSeconds: 1.45,
   despawnBehind: 28,
-  introSafeDistance: 70,
+  introSafeDistance: 38,
   minGapLanes: 1,
 } as const;
 
@@ -118,10 +121,13 @@ export const CAMERA = {
   fovBoostExtra: 3,
   shakeMax: 0.006,
   lag: 5.2,
+  yawLook: 0.7,
+  yawCam: 0.32,
   steerRoll: 0.016,
   boostPunch: 1.28,
   landDrop: 0.2,
   lookHeight: 0.62,
+  far: 920,
 } as const;
 
 export const CHASSIS = {

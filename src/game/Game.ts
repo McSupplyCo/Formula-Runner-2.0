@@ -6,7 +6,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { GameAudio } from "./audio";
 import { hits, nearMissClearance } from "./collision";
 import { InputController } from "./input";
-import { clamp, damp, formatDistance, formatScore, laneCenter } from "./math";
+import { clamp, damp, formatDistance, formatScore, headingOffset, laneCenter } from "./math";
 import { materializePattern, pickPattern, type TrafficCar } from "./patterns";
 import { commitRun, loadSave, writeSave, type SaveData } from "./save";
 import {
@@ -48,7 +48,7 @@ type Toast = { text: string; life: number; color: string };
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(CAMERA.fovIdle, 1, 0.1, 420);
+  readonly camera = new THREE.PerspectiveCamera(CAMERA.fovIdle, 1, 0.1, CAMERA.far);
   readonly input = new InputController();
   readonly audio = new GameAudio();
 
@@ -240,16 +240,33 @@ export class Game {
       if (this.run.boost <= 0) this.run.boosting = false;
     }
     const top = car.topSpeed * (this.run.boosting ? DRIVE.boostMultiplier : 1);
-    this.player.speed =
-      brake > 0.2
-        ? Math.max(38, this.player.speed - car.brake * dt)
-        : Math.min(top, this.player.speed + car.accel * dt);
+    const braking = brake > 0.12;
+    this.player.speed = braking
+      ? Math.max(DRIVE.minSpeed, this.player.speed - car.brake * clamp(brake, 0, 1) * dt)
+      : Math.min(top, this.player.speed + car.accel * dt);
 
-    const authority = 1 - DRIVE.highSpeedSteerLoss * clamp(this.player.speed / car.topSpeed, 0, 1);
-    this.player.vx = damp(this.player.vx, steer * car.steer * authority, car.grip, dt);
-    this.player.x = clamp(this.player.x + this.player.vx * dt, -ROAD.driveLimit, ROAD.driveLimit);
-    this.player.z += (this.player.speed / 3.6) * dt;
-    this.player.yaw = damp(this.player.yaw, steer * DRIVE.visualYaw, 10, dt);
+    const speedMs = this.player.speed / 3.6;
+    const speedT = clamp(this.player.speed / car.topSpeed, 0, 1);
+    const gripRef = CARS[0].grip;
+    const understeer =
+      1 - DRIVE.highSpeedSteerLoss * speedT * clamp(gripRef / Math.max(car.grip, 1), 0.84, 1.2);
+    const brakeBite = braking ? 1.2 : 1;
+    const maxYaw = car.steer * DRIVE.yawPerSteer * understeer * brakeBite;
+    const yawRate = car.grip * (Math.abs(steer) > 0.08 ? DRIVE.yawSnap : DRIVE.yawReturn);
+    this.player.yaw = damp(this.player.yaw, steer * maxYaw, yawRate, dt);
+
+    const step = headingOffset(this.player.yaw, speedMs * dt);
+    let nextX = this.player.x + step.x;
+    if (nextX > ROAD.driveLimit) {
+      nextX = ROAD.driveLimit;
+      if (this.player.yaw > 0) this.player.yaw *= 0.35;
+    } else if (nextX < -ROAD.driveLimit) {
+      nextX = -ROAD.driveLimit;
+      if (this.player.yaw < 0) this.player.yaw *= 0.35;
+    }
+    this.player.x = nextX;
+    this.player.z += step.z;
+    this.player.vx = headingOffset(this.player.yaw, speedMs).x;
     this.run.speed = this.player.speed;
     this.updateChassis(dt, steer, brake);
     this.prevSpeed = this.player.speed;
@@ -258,7 +275,7 @@ export class Game {
     const combo = tickCombo(this.run.combo, this.run.comboTimer, dt);
     this.run.combo = combo.combo;
     this.run.comboTimer = combo.timer;
-    const dz = (this.player.speed / 3.6) * dt;
+    const dz = speedMs * dt;
     this.run.distance += dz;
     this.run.score += distanceScore(dz, this.player.speed, car.topSpeed);
   }
@@ -267,7 +284,7 @@ export class Game {
     const motion = this.save.reducedMotion ? 0.28 : 1;
     const accel = (this.player.speed - this.prevSpeed) / Math.max(dt, 1 / 120);
     const pitchAccel = clamp(-accel * CHASSIS.pitchAccel, -CHASSIS.pitchMax, CHASSIS.pitchMax);
-    const pitchBrake = brake > 0.2 ? CHASSIS.pitchBrake : 0;
+    const pitchBrake = brake > 0.12 ? CHASSIS.pitchBrake : 0;
     const pitchBoost = this.run.boosting ? -CHASSIS.pitchBoost : 0;
     const targetPitch = (pitchAccel + pitchBrake + pitchBoost) * motion;
     const targetRoll = clamp(
@@ -434,11 +451,7 @@ export class Game {
 
   private sync(dt: number) {
     this.playerMesh.position.set(this.player.x, this.chassis.y, this.player.z);
-    this.playerMesh.rotation.set(
-      this.chassis.pitch,
-      THREE.MathUtils.degToRad(-this.player.yaw),
-      this.chassis.roll,
-    );
+    this.playerMesh.rotation.set(this.chassis.pitch, -this.player.yaw, this.chassis.roll);
     for (const car of this.traffic) {
       const mesh = this.trafficMeshes.get(car);
       if (!mesh) continue;
@@ -486,8 +499,9 @@ export class Game {
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 6.2, dt);
     this.camera.updateProjectionMatrix();
 
+    const heading = headingOffset(this.player.yaw, 1);
     this.desiredCam.set(
-      this.player.x * 0.26,
+      this.player.x * 0.26 - heading.x * CAMERA.back * CAMERA.yawCam,
       CAMERA.height + speedT * 0.1 + this.chassis.y * 0.42 - punch * 0.16 - land * CAMERA.landDrop,
       this.player.z - CAMERA.back - speedT * 1.05 - punch * CAMERA.boostPunch,
     );
@@ -504,7 +518,7 @@ export class Game {
     }
 
     this.look.set(
-      this.player.x * 0.16 + this.chassis.roll * 1.4,
+      this.player.x * 0.16 + this.chassis.roll * 1.4 + heading.x * CAMERA.lookAhead * CAMERA.yawLook,
       CAMERA.lookHeight + speedT * 0.06 - land * 0.18,
       this.player.z + CAMERA.lookAhead + speedT * 2.2 + punch * 1.4,
     );

@@ -53,6 +53,15 @@ export const PATTERNS: Pattern[] = [
     ],
   },
   {
+    name: "pinch",
+    minDistance: 100,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: -3, kind: "gt" },
+      { lane: 2, zOffset: 3, speedOffset: 2, kind: "support" },
+      { lane: 3, zOffset: 5, speedOffset: -1, kind: "gt" },
+    ],
+  },
+  {
     name: "leave-left",
     minDistance: 160,
     cars: [
@@ -62,13 +71,32 @@ export const PATTERNS: Pattern[] = [
     ],
   },
   {
+    name: "rolling-block",
+    minDistance: 250,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: 2, kind: "gt" },
+      { lane: 1, zOffset: 5, speedOffset: -4, kind: "support" },
+      { lane: 2, zOffset: 16, speedOffset: 4, kind: "gt" },
+      { lane: 3, zOffset: 20, speedOffset: -2, kind: "safety" },
+    ],
+  },
+  {
     name: "checker",
     minDistance: 420,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
-      { lane: 2, zOffset: 16, speedOffset: 6, kind: "support" },
-      { lane: 1, zOffset: 34, speedOffset: -10, kind: "gt" },
-      { lane: 3, zOffset: 48, speedOffset: 2, kind: "safety" },
+      { lane: 2, zOffset: 5, speedOffset: 6, kind: "support" },
+      { lane: 1, zOffset: 10, speedOffset: -10, kind: "gt" },
+      { lane: 3, zOffset: 16, speedOffset: 2, kind: "safety" },
+    ],
+  },
+  {
+    name: "wall-with-slot",
+    minDistance: 550,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
+      { lane: 1, zOffset: 2, speedOffset: 0, kind: "support" },
+      { lane: 3, zOffset: 3, speedOffset: -2, kind: "gt" },
     ],
   },
   {
@@ -82,19 +110,10 @@ export const PATTERNS: Pattern[] = [
   },
   {
     name: "weaver",
-    minDistance: 1100,
+    minDistance: 800,
     cars: [
       { lane: 1, zOffset: 0, speedOffset: 8, kind: "safety", weave: 1.4 },
       { lane: 3, zOffset: 22, speedOffset: -6, kind: "gt" },
-    ],
-  },
-  {
-    name: "wall-with-slot",
-    minDistance: 1600,
-    cars: [
-      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 1, zOffset: 2, speedOffset: 0, kind: "support" },
-      { lane: 3, zOffset: 3, speedOffset: -2, kind: "gt" },
     ],
   },
   {
@@ -116,9 +135,14 @@ export function openLanes(pattern: Pattern): number[] {
   return open;
 }
 
-export function pickPattern(distance: number, random: () => number): Pattern {
-  const eligible = PATTERNS.filter((pattern) => distance >= pattern.minDistance);
+export function patternPoolAt(distance: number): Pattern[] {
+  const eligible = PATTERNS.filter((pattern) => pattern.minDistance <= distance);
   const pool = eligible.length ? eligible : PATTERNS.slice(0, 2);
+  return pool.length > 3 ? pool.slice(-3) : pool;
+}
+
+export function pickPattern(distance: number, random: () => number): Pattern {
+  const pool = patternPoolAt(distance);
   const openPool = pool.filter((pattern) => openLanes(pattern).length > 0);
   const list = openPool.length ? openPool : pool;
   return list[Math.floor(random() * list.length)] ?? list[0];
