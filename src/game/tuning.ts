@@ -32,6 +32,7 @@ export const CARS = [
     name: "Apex",
     blurb: "Balanced race trim. Learn the night here.",
     unlockBest: 0,
+    unlockCost: 0,
     topSpeed: 248,
     accel: 42,
     brake: 78,
@@ -45,6 +46,7 @@ export const CARS = [
     name: "Drift",
     blurb: "Snappier steering. Slightly lower top end.",
     unlockBest: 900,
+    unlockCost: 800,
     topSpeed: 228,
     accel: 48,
     brake: 86,
@@ -58,6 +60,7 @@ export const CARS = [
     name: "Surge",
     blurb: "Highest speed. Demands earlier decisions.",
     unlockBest: 2200,
+    unlockCost: 2500,
     topSpeed: 286,
     accel: 36,
     brake: 70,
@@ -140,5 +143,16 @@ export const BLOOM = {
   exposure: 0.92,
 } as const;
 
-export const SAVE_VERSION = 2;
+export const CREDIT = {
+  base: 80,
+  perMeter: 0.15,
+  nearMiss: 25,
+  overtake: 15,
+  personalBest: 100,
+} as const;
+
+export const RANK_COST = [0, 120, 280, 520, 900, 1500] as const;
+export const MAX_PART_RANK = 5;
+
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = "formula-runner-2";
