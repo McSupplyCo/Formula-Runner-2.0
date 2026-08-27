@@ -53,6 +53,15 @@ export const PATTERNS: Pattern[] = [
     ],
   },
   {
+    name: "pinch",
+    minDistance: 100,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: -3, kind: "gt" },
+      { lane: 2, zOffset: 3, speedOffset: 2, kind: "support" },
+      { lane: 3, zOffset: 5, speedOffset: -1, kind: "gt" },
+    ],
+  },
+  {
     name: "leave-left",
     minDistance: 160,
     cars: [
@@ -62,13 +71,32 @@ export const PATTERNS: Pattern[] = [
     ],
   },
   {
+    name: "rolling-block",
+    minDistance: 250,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: 2, kind: "gt" },
+      { lane: 1, zOffset: 6, speedOffset: -4, kind: "support" },
+      { lane: 0, zOffset: 28, speedOffset: 4, kind: "gt" },
+      { lane: 3, zOffset: 32, speedOffset: -2, kind: "safety" },
+    ],
+  },
+  {
     name: "checker",
     minDistance: 420,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
-      { lane: 2, zOffset: 16, speedOffset: 6, kind: "support" },
-      { lane: 1, zOffset: 34, speedOffset: -10, kind: "gt" },
-      { lane: 3, zOffset: 48, speedOffset: 2, kind: "safety" },
+      { lane: 2, zOffset: 10, speedOffset: 6, kind: "support" },
+      { lane: 1, zOffset: 26, speedOffset: -10, kind: "gt" },
+      { lane: 3, zOffset: 36, speedOffset: 2, kind: "safety" },
+    ],
+  },
+  {
+    name: "wall-with-slot",
+    minDistance: 550,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
+      { lane: 1, zOffset: 2, speedOffset: 0, kind: "support" },
+      { lane: 3, zOffset: 3, speedOffset: -2, kind: "gt" },
     ],
   },
   {
@@ -82,19 +110,10 @@ export const PATTERNS: Pattern[] = [
   },
   {
     name: "weaver",
-    minDistance: 1100,
+    minDistance: 800,
     cars: [
-      { lane: 1, zOffset: 0, speedOffset: 8, kind: "safety", weave: 1.4 },
+      { lane: 1, zOffset: 0, speedOffset: 8, kind: "safety", weave: 0.85 },
       { lane: 3, zOffset: 22, speedOffset: -6, kind: "gt" },
-    ],
-  },
-  {
-    name: "wall-with-slot",
-    minDistance: 1600,
-    cars: [
-      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 1, zOffset: 2, speedOffset: 0, kind: "support" },
-      { lane: 3, zOffset: 3, speedOffset: -2, kind: "gt" },
     ],
   },
   {
@@ -104,10 +123,12 @@ export const PATTERNS: Pattern[] = [
       { lane: 0, zOffset: 0, speedOffset: 4, kind: "gt", weave: 0.8 },
       { lane: 2, zOffset: 12, speedOffset: -8, kind: "support" },
       { lane: 1, zOffset: 28, speedOffset: 10, kind: "gt" },
-      { lane: 3, zOffset: 40, speedOffset: -4, kind: "safety", weave: 1.1 },
+      { lane: 3, zOffset: 40, speedOffset: -4, kind: "safety", weave: 0.9 },
     ],
   },
 ];
+
+const BLOCK_SPAN = 7.6;
 
 export function openLanes(pattern: Pattern): number[] {
   const blocked = new Set(pattern.cars.filter((car) => car.zOffset < 12).map((car) => car.lane));
@@ -116,12 +137,65 @@ export function openLanes(pattern: Pattern): number[] {
   return open;
 }
 
-export function pickPattern(distance: number, random: () => number): Pattern {
-  const eligible = PATTERNS.filter((pattern) => distance >= pattern.minDistance);
+/** True if a driver can thread the pattern by moving at most one lane at a time. */
+export function patternHasThread(pattern: Pattern): boolean {
+  const maxZ = Math.max(0, ...pattern.cars.map((car) => car.zOffset)) + 10;
+  const slices: number[][] = [];
+  for (let z = 0; z <= maxZ; z += 4) {
+    const blocked = new Set<number>();
+    for (const car of pattern.cars) {
+      if (Math.abs(car.zOffset - z) < BLOCK_SPAN) blocked.add(car.lane);
+    }
+    const open: number[] = [];
+    for (let lane = 0; lane < L; lane++) if (!blocked.has(lane)) open.push(lane);
+    if (!open.length) return false;
+    slices.push(open);
+  }
+  let reach = new Set(slices[0]);
+  for (let i = 1; i < slices.length; i++) {
+    const next = new Set<number>();
+    for (const lane of slices[i]) {
+      if (reach.has(lane) || reach.has(lane - 1) || reach.has(lane + 1)) next.add(lane);
+    }
+    if (!next.size) return false;
+    reach = next;
+  }
+  return true;
+}
+
+export function lanesBlockedNear(
+  cars: Array<{ lane: number; z: number }>,
+  z: number,
+  window = 12,
+): Set<number> {
+  const blocked = new Set<number>();
+  for (const car of cars) {
+    if (Math.abs(car.z - z) <= window) blocked.add(car.lane);
+  }
+  return blocked;
+}
+
+export function patternPoolAt(distance: number): Pattern[] {
+  const eligible = PATTERNS.filter((pattern) => pattern.minDistance <= distance);
   const pool = eligible.length ? eligible : PATTERNS.slice(0, 2);
-  const openPool = pool.filter((pattern) => openLanes(pattern).length > 0);
-  const list = openPool.length ? openPool : pool;
+  return pool.length > 3 ? pool.slice(-3) : pool;
+}
+
+export function pickFairPattern(
+  distance: number,
+  random: () => number,
+  blocked: Iterable<number> = [],
+): Pattern | null {
+  const closed = new Set(blocked);
+  const pool = patternPoolAt(distance).filter((pattern) => patternHasThread(pattern));
+  const fair = pool.filter((pattern) => openLanes(pattern).some((lane) => !closed.has(lane)));
+  const list = fair.length ? fair : closed.size >= 3 ? [] : pool;
+  if (!list.length) return null;
   return list[Math.floor(random() * list.length)] ?? list[0];
+}
+
+export function pickPattern(distance: number, random: () => number): Pattern {
+  return pickFairPattern(distance, random) ?? patternPoolAt(distance)[0] ?? PATTERNS[0];
 }
 
 export function materializePattern(

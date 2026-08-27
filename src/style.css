@@ -129,6 +129,7 @@ button { font: inherit; color: inherit; }
 }
 .panel h2 { font-size: 26px; font-weight: 650; letter-spacing: -0.03em; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; }
+.ladder { color: var(--muted); font-size: 12px; letter-spacing: 0.02em; margin-top: 4px; }
 
 .primary, .ghost {
   border: 0;
@@ -181,6 +182,7 @@ button { font: inherit; color: inherit; }
 }
 .car strong { font-size: 14px; font-weight: 650; }
 .car span, .car em { color: var(--muted); font-size: 12px; font-style: normal; grid-column: 2; }
+.car em, .part em { font-variant-numeric: tabular-nums; }
 .car.selected { border-color: rgba(138, 212, 224, 0.65); background: rgba(138, 212, 224, 0.06); }
 .car.locked { opacity: 0.4; }
 
@@ -211,15 +213,20 @@ button { font: inherit; color: inherit; }
   padding: 11px 12px;
 }
 .part span, .part em, .livery em { color: var(--muted); font-size: 12px; font-style: normal; }
+.part em { white-space: nowrap; text-align: right; }
 .part strong, .livery strong { display: block; font-weight: 650; }
-.pips { display: flex; gap: 4px; margin-top: 8px; }
-.pips span {
-  width: 12px;
+.rank-bar {
+  margin-top: 8px;
   height: 3px;
   border-radius: 99px;
   background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
 }
-.pips span.on { background: var(--accent); }
+.rank-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
 .livery { padding: 9px 11px; min-width: 96px; }
 .livery.selected, .part:not(:disabled):hover, .livery:hover, .car:not(:disabled):hover {
   border-color: rgba(138, 212, 224, 0.4);

@@ -1,4 +1,4 @@
-import { CARS, CREDIT, DRIVE, MAX_PART_RANK, RANK_COST, type CarId } from "./tuning";
+import { CARS, CREDIT, DRIVE, MAX_PART_RANK, type CarId } from "./tuning";
 
 export type PartId = "power" | "chassis" | "aero" | "ers";
 
@@ -56,12 +56,12 @@ export const LIVERIES = [
 
 export type LiveryId = (typeof LIVERIES)[number]["id"];
 
-const POWER = [0, 3, 6, 10, 14, 18];
-const CHASSIS = [0, 4, 8, 13, 18, 24];
-const STEER = [0, 1.2, 2.4, 3.8, 5.2, 6.8];
-const GRIP = [0, 0.8, 1.6, 2.5, 3.5, 4.6];
-const ERS_CHARGE = [0, 0.015, 0.03, 0.05, 0.07, 0.09];
-const ERS_DRAIN = [0, 0.02, 0.035, 0.05, 0.065, 0.08];
+const POWER_CAP = 18;
+const CHASSIS_CAP = 24;
+const STEER_CAP = 6.8;
+const GRIP_CAP = 4.6;
+const ERS_CHARGE_CAP = 0.09;
+const ERS_DRAIN_CAP = 0.08;
 
 export function emptyCarGarage(car: CarId): CarGarage {
   return { power: 0, chassis: 0, aero: 0, ers: 0, livery: `${car}-stock` };
@@ -94,9 +94,17 @@ export function creditPayout(run: {
   return Math.max(0, Math.round(raw));
 }
 
+export function carPartCap(): number {
+  return PARTS.length * MAX_PART_RANK;
+}
+
+export function upgradePool(): number {
+  return CARS.length * carPartCap();
+}
+
 export function rankCost(nextRank: number): number {
   if (nextRank < 1 || nextRank > MAX_PART_RANK) return Infinity;
-  return RANK_COST[nextRank] ?? Infinity;
+  return Math.round(20 + nextRank * 6 + nextRank * nextRank * 0.5);
 }
 
 export function ownsCar(save: GarageState, id: CarId): boolean {
@@ -112,8 +120,8 @@ export function partTotal(row: CarGarage): number {
   return row.power + row.chassis + row.aero + row.ers;
 }
 
-function bonus(table: number[], rank: number): number {
-  return table[Math.max(0, Math.min(MAX_PART_RANK, rank))] ?? 0;
+function scaled(cap: number, rank: number): number {
+  return (cap * Math.max(0, Math.min(MAX_PART_RANK, rank))) / MAX_PART_RANK;
 }
 
 export function fittedSpec(save: GarageState, id: CarId): FittedSpec {
@@ -124,14 +132,14 @@ export function fittedSpec(save: GarageState, id: CarId): FittedSpec {
     LIVERIES.find((item) => item.car === def.id && item.cost === 0);
   return {
     id: def.id,
-    topSpeed: def.topSpeed + bonus(CHASSIS, row.chassis),
-    accel: def.accel + bonus(POWER, row.power),
+    topSpeed: def.topSpeed + scaled(CHASSIS_CAP, row.chassis),
+    accel: def.accel + scaled(POWER_CAP, row.power),
     brake: def.brake,
-    steer: def.steer + bonus(STEER, row.aero),
-    grip: def.grip + bonus(GRIP, row.aero),
-    boostDrain: Math.max(0.28, DRIVE.boostDrain - bonus(ERS_DRAIN, row.ers)),
+    steer: def.steer + scaled(STEER_CAP, row.aero),
+    grip: def.grip + scaled(GRIP_CAP, row.aero),
+    boostDrain: Math.max(0.28, DRIVE.boostDrain - scaled(ERS_DRAIN_CAP, row.ers)),
     boostMinCharge: DRIVE.boostMinCharge,
-    boostNearMissCharge: DRIVE.boostNearMissCharge + bonus(ERS_CHARGE, row.ers),
+    boostNearMissCharge: DRIVE.boostNearMissCharge + scaled(ERS_CHARGE_CAP, row.ers),
     color: livery?.color ?? def.color,
     accent: livery?.accent ?? def.accent,
   };
@@ -152,7 +160,7 @@ export function buyPart<T extends GarageState>(save: T, carId: CarId, part: Part
       garage: { ...save.garage, [carId]: row },
     },
     ok: true,
-    hint: `${PARTS.find((item) => item.id === part)?.name} ${next}/${MAX_PART_RANK}`,
+    hint: `${PARTS.find((item) => item.id === part)?.name} · Rank ${next} / ${MAX_PART_RANK}`,
   };
 }
 

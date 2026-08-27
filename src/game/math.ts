@@ -6,6 +6,11 @@ export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const damp = (current: number, target: number, lambda: number, dt: number) =>
   lerp(current, target, 1 - Math.exp(-lambda * dt));
 
+/** Displacement along heading. +yaw steers toward +x; most of the travel stays on +z. */
+export function headingOffset(yaw: number, distance: number) {
+  return { x: Math.sin(yaw) * distance, z: Math.cos(yaw) * distance };
+}
+
 export const laneCenter = (lane: number, laneWidth: number, laneCount: number) =>
   (lane - (laneCount - 1) / 2) * laneWidth;
 

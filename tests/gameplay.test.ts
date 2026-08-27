@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { aabbOverlap, clamp, laneCenter, sweptOverlap } from "../src/game/math";
+import { aabbOverlap, clamp, headingOffset, laneCenter, sweptOverlap } from "../src/game/math";
 import { hits, hitsBarrier } from "../src/game/collision";
-import { openLanes, PATTERNS, pickPattern } from "../src/game/patterns";
+import { openLanes, PATTERNS, patternHasThread, patternPoolAt, pickFairPattern, pickPattern } from "../src/game/patterns";
 import {
   commitRun,
   defaultSave,
@@ -10,8 +10,11 @@ import {
 import {
   buyCar,
   buyPart,
+  carPartCap,
   creditPayout,
   fittedSpec,
+  rankCost,
+  upgradePool,
 } from "../src/game/garage";
 import {
   difficultyAt,
@@ -23,7 +26,8 @@ import {
   tickCombo,
 } from "../src/game/scoring";
 import { emptyRun } from "../src/game/state";
-import { BLOOM, CAMERA, CHASSIS, ROAD } from "../src/game/tuning";
+import { BLOOM, CAMERA, CHASSIS, DRIVE, MAX_PART_RANK, ROAD } from "../src/game/tuning";
+import { CITY_BEHIND, CITY_SPAN, recycleCityZ } from "../src/game/world";
 
 describe("camera feel tuning", () => {
   it("keeps chase camera contract names", () => {
@@ -32,8 +36,19 @@ describe("camera feel tuning", () => {
     expect(CAMERA.fovBoostExtra).toBeGreaterThan(0);
     expect(CAMERA.height).toBeGreaterThan(0);
     expect(CAMERA.back).toBeGreaterThan(0);
+    expect(CAMERA.yawLook).toBeGreaterThan(CAMERA.yawCam);
     expect(BLOOM.threshold).toBeGreaterThan(0.5);
-    expect(CHASSIS.rollMax).toBeLessThan(0.5);
+    expect(CHASSIS.rollMax).toBeLessThan(0.08);
+    expect(CAMERA.steerRoll).toBeLessThan(0.004);
+  });
+});
+
+describe("drive feel", () => {
+  it("keeps snappy lateral vx and analog braking", () => {
+    expect(DRIVE.minSpeed).toBe(24);
+    expect(DRIVE.highSpeedSteerLoss).toBeLessThan(0.4);
+    expect(DRIVE.visualYawMax).toBeLessThan(0.12);
+    expect("yawPerSteer" in DRIVE).toBe(false);
   });
 });
 
@@ -114,8 +129,27 @@ describe("garage", () => {
     const bought = buyPart(funded, "apex", "power");
     expect(bought.ok).toBe(true);
     expect(bought.save.garage.apex.power).toBe(1);
-    expect(bought.save.credits).toBe(80);
+    expect(bought.save.credits).toBe(200 - rankCost(1));
     expect(fittedSpec(bought.save, "apex").accel).toBeGreaterThan(fittedSpec(funded, "apex").accel);
+  });
+
+  it("keeps each rank small and spreads upgrades across a long ladder", () => {
+    expect(upgradePool()).toBe(252);
+    expect(carPartCap()).toBe(84);
+    expect(carPartCap()).toBe(MAX_PART_RANK * 4);
+    expect(rankCost(1)).toBeLessThan(40);
+    expect(rankCost(MAX_PART_RANK)).toBeGreaterThan(rankCost(1) * 8);
+    const stock = fittedSpec(defaultSave(), "apex");
+    const one = buyPart({ ...defaultSave(), credits: 500 }, "apex", "power").save;
+    expect(fittedSpec(one, "apex").accel - stock.accel).toBeLessThan(1.2);
+    const maxed = {
+      ...defaultSave(),
+      garage: {
+        ...defaultSave().garage,
+        apex: { ...defaultSave().garage.apex, power: MAX_PART_RANK },
+      },
+    };
+    expect(fittedSpec(maxed, "apex").accel - stock.accel).toBeGreaterThan(15);
   });
 
   it("requires distance and credits before selling Drift", () => {
@@ -166,9 +200,45 @@ describe("traffic patterns", () => {
     }
   });
 
+  it("keeps a driveable thread through every pattern", () => {
+    for (const pattern of PATTERNS) {
+      expect(patternHasThread(pattern), pattern.name).toBe(true);
+    }
+  });
+
+  it("keeps weaver drift from sealing a gap", () => {
+    for (const pattern of PATTERNS) {
+      for (const car of pattern.cars) {
+        expect(car.weave ?? 0, `${pattern.name} lane ${car.lane}`).toBeLessThanOrEqual(0.9);
+      }
+    }
+  });
+
+  it("does not spawn a wall into the last open lane", () => {
+    const pick = pickFairPattern(800, () => 0, [0, 1, 3]);
+    expect(pick).not.toBeNull();
+    expect(openLanes(pick!).some((lane) => lane === 2)).toBe(true);
+  });
+
+  it("skips a spawn when every lane ahead is already taken", () => {
+    expect(pickFairPattern(800, () => 0, [0, 1, 2, 3])).toBeNull();
+  });
+
+  it("keeps every early pattern at distance 0", () => {
+    const pool = patternPoolAt(0);
+    expect(pool.length).toBeGreaterThan(0);
+    expect(pool.every((pattern) => pattern.minDistance === 0)).toBe(true);
+  });
+
+  it("drops easy patterns from the late-game pool", () => {
+    const names = patternPoolAt(2000).map((pattern) => pattern.name);
+    expect(names).not.toContain("single");
+  });
+
   it("only picks eligible patterns", () => {
     const early = pickPattern(0, () => 0);
     expect(early.minDistance).toBe(0);
+    expect(patternPoolAt(0).some((pattern) => pattern.name === early.name)).toBe(true);
   });
 
   it("places lane centers inside the road", () => {
@@ -186,6 +256,32 @@ describe("state", () => {
   });
 });
 
+describe("city recycle", () => {
+  it("jumps a building behind the player forward by span, not backward", () => {
+    const next = recycleCityZ(10, 200);
+    expect(next).toBe(10 + CITY_SPAN);
+    expect(next).toBeGreaterThan(200);
+    expect(next).toBeGreaterThan(10);
+    expect(next).not.toBe(10 - CITY_SPAN);
+  });
+
+  it("does not wrap a building already ahead backward", () => {
+    expect(recycleCityZ(400, 0)).toBe(400);
+  });
+
+  it("is stable when called twice and never ping-pongs as playerZ increases", () => {
+    let z = 10;
+    for (let playerZ = 0; playerZ <= 2400; playerZ += 40) {
+      const once = recycleCityZ(z, playerZ);
+      const twice = recycleCityZ(once, playerZ);
+      expect(twice).toBe(once);
+      expect(once).toBeGreaterThanOrEqual(z);
+      expect(once).toBeGreaterThanOrEqual(playerZ - CITY_BEHIND);
+      z = once;
+    }
+  });
+});
+
 describe("math", () => {
   it("clamps and sweeps conservatively", () => {
     expect(clamp(5, 0, 3)).toBe(3);
@@ -197,5 +293,17 @@ describe("math", () => {
         0,
       ),
     ).toBe(true);
+  });
+
+  it("steps along heading instead of strafing", () => {
+    const straight = headingOffset(0, 10);
+    expect(straight.x).toBeCloseTo(0);
+    expect(straight.z).toBeCloseTo(10);
+    const right = headingOffset(0.2, 10);
+    expect(right.x).toBeGreaterThan(0);
+    expect(right.z).toBeLessThan(10);
+    const left = headingOffset(-0.2, 10);
+    expect(left.x).toBeCloseTo(-right.x);
+    expect(left.z).toBeCloseTo(right.z);
   });
 });
