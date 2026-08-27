@@ -83,7 +83,7 @@ export class TrackWorld {
   private zoneTint = new THREE.Color();
 
   constructor(private scene: THREE.Scene) {
-    this.fog = new THREE.FogExp2(ZONES[0].fog, 0.0046);
+    this.fog = new THREE.FogExp2(ZONES[0].fog, 0.0035);
     scene.fog = this.fog;
     scene.background = new THREE.Color(ZONES[0].fog);
 
@@ -164,6 +164,7 @@ export class TrackWorld {
     scene.add(this.sky);
 
     this.stars = this.makeStars();
+    this.stars.frustumCulled = false;
     scene.add(this.stars);
 
     this.makeCity();
@@ -212,7 +213,10 @@ export class TrackWorld {
       this.cityDummy.updateMatrix();
       slot.mesh.setMatrixAt(slot.index, this.cityDummy.matrix);
     }
-    for (const layer of this.cityLayers) layer.instanceMatrix.needsUpdate = true;
+    for (const layer of this.cityLayers) {
+      layer.instanceMatrix.needsUpdate = true;
+      layer.computeBoundingSphere();
+    }
     this.placeStreetLights(playerZ);
   }
 
@@ -325,10 +329,13 @@ export class TrackWorld {
         emissive: new THREE.Color(0x152030),
         emissiveIntensity: 0.22,
       }),
-      36,
+      48,
     );
     this.cityLayers = [towers, crowns, slabs, sheds, antennas, horizon];
-    for (const layer of this.cityLayers) this.scene.add(layer);
+    for (const layer of this.cityLayers) {
+      layer.frustumCulled = false;
+      this.scene.add(layer);
+    }
 
     const tint = new THREE.Color();
     for (let i = 0; i < 72; i++) {
@@ -383,15 +390,15 @@ export class TrackWorld {
       tint.setHSL(0.08, 0.08, 0.7 + (i % 4) * 0.05);
       sheds.setColorAt(i, tint);
     }
-    for (let i = 0; i < 36; i++) {
+    for (let i = 0; i < 48; i++) {
       const side = i % 2 === 0 ? -1 : 1;
       const sy = 38 + (i % 8) * 7;
       this.pushSlot(
         horizon,
         i,
-        side * (58 + (i % 5) * 11),
+        side * (54 + (i % 6) * 9),
         sy / 2,
-        ((i + 0.15) / 36) * CITY_SPAN,
+        ((i + 0.15) / 48) * CITY_SPAN,
         9 + (i % 4) * 3,
         sy,
         8 + (i % 3) * 2,
@@ -402,6 +409,8 @@ export class TrackWorld {
     }
     for (const layer of this.cityLayers) {
       if (layer.instanceColor) layer.instanceColor.needsUpdate = true;
+      layer.instanceMatrix.needsUpdate = true;
+      layer.computeBoundingSphere();
     }
   }
 

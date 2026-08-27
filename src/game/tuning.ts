@@ -77,10 +77,10 @@ export const DRIVE = {
   startSpeed: 72,
   minSpeed: 24,
   coastDecel: 8,
-  highSpeedSteerLoss: 0.68,
-  yawPerSteer: 0.011,
-  yawSnap: 0.62,
-  yawReturn: 0.34,
+  highSpeedSteerLoss: 0.28,
+  visualYawFromVx: 0.038,
+  visualYawMax: 0.09,
+  visualYawDamp: 16,
   hitchMaxDt: 1 / 20,
   boostMultiplier: 1.26,
   boostDrain: 0.42,
@@ -123,7 +123,7 @@ export const CAMERA = {
   lag: 5.2,
   yawLook: 0.7,
   yawCam: 0.32,
-  steerRoll: 0.016,
+  steerRoll: 0.0007,
   boostPunch: 1.28,
   landDrop: 0.2,
   lookHeight: 0.62,
@@ -131,13 +131,13 @@ export const CAMERA = {
 } as const;
 
 export const CHASSIS = {
-  rollVx: 0.046,
-  rollMax: 0.2,
-  pitchAccel: 0.00105,
-  pitchBrake: 0.05,
-  pitchBoost: 0.042,
-  pitchMax: 0.11,
-  squat: 0.065,
+  rollVx: 0.012,
+  rollMax: 0.04,
+  pitchAccel: 0.00035,
+  pitchBrake: 0.016,
+  pitchBoost: 0.012,
+  pitchMax: 0.03,
+  squat: 0.03,
   spring: 52,
   damp: 9.5,
 } as const;
@@ -157,8 +157,7 @@ export const CREDIT = {
   personalBest: 100,
 } as const;
 
-export const RANK_COST = [0, 120, 280, 520, 900, 1500] as const;
-export const MAX_PART_RANK = 5;
+export const MAX_PART_RANK = 21;
 
 export const SAVE_VERSION = 3;
 export const SAVE_KEY = "formula-runner-2";

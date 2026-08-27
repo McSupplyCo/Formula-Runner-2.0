@@ -49,7 +49,7 @@ export type Difficulty = {
 export function difficultyAt(distance: number): Difficulty {
   const t = clamp(distance / 4500, 0, 1);
   return {
-    spawnInterval: lerpRange(0.92, 0.48, t),
+    spawnInterval: lerpRange(1.08, 0.64, t),
     trafficSpeed: lerpRange(96, 205, t),
     patternBias: t,
     moverChance: lerpRange(0.12, 0.55, t),

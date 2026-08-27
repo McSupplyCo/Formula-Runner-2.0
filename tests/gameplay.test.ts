@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aabbOverlap, clamp, headingOffset, laneCenter, sweptOverlap } from "../src/game/math";
 import { hits, hitsBarrier } from "../src/game/collision";
-import { openLanes, PATTERNS, patternPoolAt, pickPattern } from "../src/game/patterns";
+import { openLanes, PATTERNS, patternHasThread, patternPoolAt, pickFairPattern, pickPattern } from "../src/game/patterns";
 import {
   commitRun,
   defaultSave,
@@ -10,8 +10,11 @@ import {
 import {
   buyCar,
   buyPart,
+  carPartCap,
   creditPayout,
   fittedSpec,
+  rankCost,
+  upgradePool,
 } from "../src/game/garage";
 import {
   difficultyAt,
@@ -23,7 +26,7 @@ import {
   tickCombo,
 } from "../src/game/scoring";
 import { emptyRun } from "../src/game/state";
-import { BLOOM, CAMERA, CHASSIS, ROAD } from "../src/game/tuning";
+import { BLOOM, CAMERA, CHASSIS, DRIVE, MAX_PART_RANK, ROAD } from "../src/game/tuning";
 import { CITY_BEHIND, CITY_SPAN, recycleCityZ } from "../src/game/world";
 
 describe("camera feel tuning", () => {
@@ -35,7 +38,17 @@ describe("camera feel tuning", () => {
     expect(CAMERA.back).toBeGreaterThan(0);
     expect(CAMERA.yawLook).toBeGreaterThan(CAMERA.yawCam);
     expect(BLOOM.threshold).toBeGreaterThan(0.5);
-    expect(CHASSIS.rollMax).toBeLessThan(0.5);
+    expect(CHASSIS.rollMax).toBeLessThan(0.08);
+    expect(CAMERA.steerRoll).toBeLessThan(0.004);
+  });
+});
+
+describe("drive feel", () => {
+  it("keeps snappy lateral vx and analog braking", () => {
+    expect(DRIVE.minSpeed).toBe(24);
+    expect(DRIVE.highSpeedSteerLoss).toBeLessThan(0.4);
+    expect(DRIVE.visualYawMax).toBeLessThan(0.12);
+    expect("yawPerSteer" in DRIVE).toBe(false);
   });
 });
 
@@ -116,8 +129,27 @@ describe("garage", () => {
     const bought = buyPart(funded, "apex", "power");
     expect(bought.ok).toBe(true);
     expect(bought.save.garage.apex.power).toBe(1);
-    expect(bought.save.credits).toBe(80);
+    expect(bought.save.credits).toBe(200 - rankCost(1));
     expect(fittedSpec(bought.save, "apex").accel).toBeGreaterThan(fittedSpec(funded, "apex").accel);
+  });
+
+  it("keeps each rank small and spreads upgrades across a long ladder", () => {
+    expect(upgradePool()).toBe(252);
+    expect(carPartCap()).toBe(84);
+    expect(carPartCap()).toBe(MAX_PART_RANK * 4);
+    expect(rankCost(1)).toBeLessThan(40);
+    expect(rankCost(MAX_PART_RANK)).toBeGreaterThan(rankCost(1) * 8);
+    const stock = fittedSpec(defaultSave(), "apex");
+    const one = buyPart({ ...defaultSave(), credits: 500 }, "apex", "power").save;
+    expect(fittedSpec(one, "apex").accel - stock.accel).toBeLessThan(1.2);
+    const maxed = {
+      ...defaultSave(),
+      garage: {
+        ...defaultSave().garage,
+        apex: { ...defaultSave().garage.apex, power: MAX_PART_RANK },
+      },
+    };
+    expect(fittedSpec(maxed, "apex").accel - stock.accel).toBeGreaterThan(15);
   });
 
   it("requires distance and credits before selling Drift", () => {
@@ -166,6 +198,30 @@ describe("traffic patterns", () => {
     for (const pattern of PATTERNS) {
       expect(openLanes(pattern).length).toBeGreaterThan(0);
     }
+  });
+
+  it("keeps a driveable thread through every pattern", () => {
+    for (const pattern of PATTERNS) {
+      expect(patternHasThread(pattern), pattern.name).toBe(true);
+    }
+  });
+
+  it("keeps weaver drift from sealing a gap", () => {
+    for (const pattern of PATTERNS) {
+      for (const car of pattern.cars) {
+        expect(car.weave ?? 0, `${pattern.name} lane ${car.lane}`).toBeLessThanOrEqual(0.9);
+      }
+    }
+  });
+
+  it("does not spawn a wall into the last open lane", () => {
+    const pick = pickFairPattern(800, () => 0, [0, 1, 3]);
+    expect(pick).not.toBeNull();
+    expect(openLanes(pick!).some((lane) => lane === 2)).toBe(true);
+  });
+
+  it("skips a spawn when every lane ahead is already taken", () => {
+    expect(pickFairPattern(800, () => 0, [0, 1, 2, 3])).toBeNull();
   });
 
   it("keeps every early pattern at distance 0", () => {

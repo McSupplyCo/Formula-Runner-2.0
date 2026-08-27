@@ -59,6 +59,7 @@ const ids = [
   "garageParts",
   "garageLiveries",
   "garageHint",
+  "garageLadder",
   "resultCredits",
 ] as const;
 

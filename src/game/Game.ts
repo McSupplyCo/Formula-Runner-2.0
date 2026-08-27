@@ -7,13 +7,14 @@ import { GameAudio } from "./audio";
 import { hits, nearMissClearance } from "./collision";
 import { InputController } from "./input";
 import { clamp, damp, formatDistance, formatScore, headingOffset, laneCenter } from "./math";
-import { materializePattern, pickPattern, type TrafficCar } from "./patterns";
+import { lanesBlockedNear, materializePattern, pickFairPattern, type TrafficCar } from "./patterns";
 import { commitRun, loadSave, writeSave, type SaveData } from "./save";
 import {
   buyCar,
   buyLivery,
   buyPart,
   carAvailable,
+  carPartCap,
   creditPayout,
   emptyCarGarage,
   fittedSpec,
@@ -23,6 +24,7 @@ import {
   PARTS,
   partTotal,
   rankCost,
+  upgradePool,
   type PartId,
 } from "./garage";
 import {
@@ -247,26 +249,20 @@ export class Game {
 
     const speedMs = this.player.speed / 3.6;
     const speedT = clamp(this.player.speed / car.topSpeed, 0, 1);
-    const gripRef = CARS[0].grip;
-    const understeer =
-      1 - DRIVE.highSpeedSteerLoss * speedT * clamp(gripRef / Math.max(car.grip, 1), 0.84, 1.2);
-    const brakeBite = braking ? 1.2 : 1;
-    const maxYaw = car.steer * DRIVE.yawPerSteer * understeer * brakeBite;
-    const yawRate = car.grip * (Math.abs(steer) > 0.08 ? DRIVE.yawSnap : DRIVE.yawReturn);
-    this.player.yaw = damp(this.player.yaw, steer * maxYaw, yawRate, dt);
-
-    const step = headingOffset(this.player.yaw, speedMs * dt);
-    let nextX = this.player.x + step.x;
+    const authority = 1 - DRIVE.highSpeedSteerLoss * speedT;
+    this.player.vx = damp(this.player.vx, steer * car.steer * authority, car.grip, dt);
+    let nextX = this.player.x + this.player.vx * dt;
     if (nextX > ROAD.driveLimit) {
       nextX = ROAD.driveLimit;
-      if (this.player.yaw > 0) this.player.yaw *= 0.35;
+      this.player.vx = Math.min(0, this.player.vx);
     } else if (nextX < -ROAD.driveLimit) {
       nextX = -ROAD.driveLimit;
-      if (this.player.yaw < 0) this.player.yaw *= 0.35;
+      this.player.vx = Math.max(0, this.player.vx);
     }
     this.player.x = nextX;
-    this.player.z += step.z;
-    this.player.vx = headingOffset(this.player.yaw, speedMs).x;
+    this.player.z += speedMs * dt;
+    const yawTarget = clamp(this.player.vx * DRIVE.visualYawFromVx, -DRIVE.visualYawMax, DRIVE.visualYawMax);
+    this.player.yaw = damp(this.player.yaw, yawTarget, DRIVE.visualYawDamp, dt);
     this.run.speed = this.player.speed;
     this.updateChassis(dt, steer, brake);
     this.prevSpeed = this.player.speed;
@@ -361,8 +357,11 @@ export class Game {
 
   private spawn(baseSpeed: number, moverChance: number) {
     const lookahead = Math.max(SPAWN.minLookahead, (this.player.speed / 3.6) * SPAWN.lookaheadSeconds);
-    const pattern = pickPattern(this.run.distance, Math.random);
-    const cars = materializePattern(pattern, this.player.z + lookahead, baseSpeed, moverChance, Math.random);
+    const origin = this.player.z + lookahead;
+    const blocked = lanesBlockedNear(this.traffic, origin, 14);
+    const pattern = pickFairPattern(this.run.distance, Math.random, blocked);
+    if (!pattern) return;
+    const cars = materializePattern(pattern, origin, baseSpeed, moverChance, Math.random);
     for (const car of cars) {
       this.traffic.push(car);
       const mesh = this.acquire(car.kind);
@@ -451,7 +450,7 @@ export class Game {
 
   private sync(dt: number) {
     this.playerMesh.position.set(this.player.x, this.chassis.y, this.player.z);
-    this.playerMesh.rotation.set(this.chassis.pitch, -this.player.yaw, this.chassis.roll);
+    this.playerMesh.rotation.set(0, -this.player.yaw, 0);
     for (const car of this.traffic) {
       const mesh = this.trafficMeshes.get(car);
       if (!mesh) continue;
@@ -524,7 +523,9 @@ export class Game {
     );
     this.lookMat.lookAt(this.camPos, this.look, this.camera.up);
     this.camQuat.setFromRotationMatrix(this.lookMat);
-    const rollTarget = reduced ? 0 : this.chassis.roll * 0.55 + this.player.vx * CAMERA.steerRoll;
+    const rollTarget = reduced
+      ? 0
+      : clamp(this.chassis.roll + this.player.vx * CAMERA.steerRoll, -CHASSIS.rollMax, CHASSIS.rollMax);
     this.camRoll = damp(this.camRoll, rollTarget, 10, dt);
     this.camera.position.copy(this.camPos);
     this.camera.quaternion.copy(this.camQuat);
@@ -813,7 +814,7 @@ export class Game {
       const spec = fittedSpec(this.save, car.id);
       const ranks = partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id));
       let status: string;
-      if (owned) status = `${Math.round(spec.topSpeed)} kph · ${ranks}/20`;
+      if (owned) status = `${Math.round(spec.topSpeed)} kph · ${ranks} / ${carPartCap()} ranks`;
       else if (available) status = `Buy · ${formatCredits(car.unlockCost)}`;
       else status = `Unlock at ${car.unlockBest.toLocaleString("en-US")} m`;
       const locked = !owned && !available;
@@ -844,6 +845,9 @@ export class Game {
   private renderGarage() {
     const row = this.save.garage[this.garageCar] ?? emptyCarGarage(this.garageCar);
     if (this.ui.garageCredits) this.ui.garageCredits.textContent = formatCredits(this.save.credits);
+    if (this.ui.garageLadder) {
+      this.ui.garageLadder.textContent = `${upgradePool()} upgrades · ${MAX_PART_RANK} ranks per part`;
+    }
     if (this.ui.garageCars) {
       this.ui.garageCars.innerHTML = CARS.map((car) => {
         const owned = ownsCar(this.save, car.id);
@@ -851,7 +855,7 @@ export class Game {
         const available = carAvailable(this.save, car.id);
         const locked = !owned && !available;
         const label = owned
-          ? `${partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id))}/20`
+          ? `${partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id))} / ${carPartCap()} ranks`
           : available
             ? `Buy · ${formatCredits(car.unlockCost)}`
             : `Unlock at ${car.unlockBest.toLocaleString("en-US")} m`;
@@ -869,16 +873,14 @@ export class Game {
             const rank = row[part.id];
             const maxed = rank >= MAX_PART_RANK;
             const cost = rankCost(rank + 1);
-            const pips = Array.from({ length: MAX_PART_RANK }, (_, i) =>
-              `<span class="${i < rank ? "on" : ""}"></span>`,
-            ).join("");
+            const pct = Math.round((rank / MAX_PART_RANK) * 100);
             return `<button class="part" data-part="${part.id}" ${maxed ? "disabled" : ""}>
               <div>
                 <strong>${part.name}</strong>
                 <span>${part.blurb}</span>
-                <div class="pips" aria-hidden="true">${pips}</div>
+                <div class="rank-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
               </div>
-              <em>${maxed ? "Maxed" : formatCredits(cost)}</em>
+              <em>${maxed ? `Rank ${MAX_PART_RANK} / ${MAX_PART_RANK}` : `Rank ${rank} / ${MAX_PART_RANK} · ${formatCredits(cost)}`}</em>
             </button>`;
           }).join("")
         : `<p class="hint">Buy this car before you can spec it.</p>`;
@@ -910,7 +912,9 @@ export class Game {
     this.garageFrom = from;
     this.garageCar = this.save.selectedCar;
     this.showRailPanel("garage");
-    if (this.ui.garageHint) this.ui.garageHint.textContent = "Race earns credits. Spend them here, one rank at a time.";
+    if (this.ui.garageHint) {
+      this.ui.garageHint.textContent = `Each buy is a small step. Full spec is ${carPartCap()} ranks on this car, ${upgradePool()} across the grid.`;
+    }
     this.renderGarage();
   }
 
