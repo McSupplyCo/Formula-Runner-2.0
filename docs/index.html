@@ -6,7 +6,7 @@
     <title>Formula Runner 2.0 — Floor it. Don't stop.</title>
     <meta
       name="description"
-      content="An arcade night-circuit racer for the browser. Auto-accelerate, thread four lanes of traffic, charge boost off near misses. No install, no ads, no licensed brands."
+      content="An arcade night-circuit racer for the browser. Auto-accelerate, thread four lanes of traffic, charge boost off near misses. No install, no licensed brands."
     />
     <meta name="theme-color" content="#060d18" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -25,7 +25,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=DM+Sans:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Manrope:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="landing.css" />
@@ -66,7 +66,7 @@
             <p class="lead">
               An original formula car, four lanes of night traffic, and no reason to lift.
               Thread the gaps to charge boost, spend it to make the next gap tighter.
-              Loads in a browser tab.
+              Credits buy Engine, Tires, Turbo, and Aero across many runs — not one lucky night.
             </p>
 
             <div class="hero-actions">
@@ -95,12 +95,12 @@
           <ul>
             <li>Near miss</li><li>Overtake</li><li>Boost</li><li>Combo &times;8</li>
             <li>Harbor Lights</li><li>Neon Cut</li><li>Storm Ribbon</li><li>Apex Void</li>
-            <li>60 fps</li><li>No install</li><li>No ads</li><li>Original livery</li>
+            <li>60 fps</li><li>No install</li><li>Garage</li><li>Original livery</li>
           </ul>
           <ul>
             <li>Near miss</li><li>Overtake</li><li>Boost</li><li>Combo &times;8</li>
             <li>Harbor Lights</li><li>Neon Cut</li><li>Storm Ribbon</li><li>Apex Void</li>
-            <li>60 fps</li><li>No install</li><li>No ads</li><li>Original livery</li>
+            <li>60 fps</li><li>No install</li><li>Garage</li><li>Original livery</li>
           </ul>
         </div>
       </div>
@@ -157,11 +157,15 @@
             </li>
             <li class="reveal">
               <b>Difficulty</b>
-              <span>Spawns tighten from 1.55 s to 0.72 s and traffic speeds up from 78 to 168 kph over the first 4,500 m.</span>
+              <span>Spawns tighten from 1.14 s to 0.68 s and traffic speeds up from 92 to 198 kph over the first 5,200 m.</span>
             </li>
             <li class="reveal">
               <b>Your data</b>
-              <span>A versioned local save holds your best score and unlocks. Nothing leaves the browser.</span>
+              <span>A versioned local save holds your best score, garage, and credits. Nothing leaves the browser.</span>
+            </li>
+            <li class="reveal">
+              <b>Garage</b>
+              <span>Engine, Tires, Turbo, and Aero — 12 ranks each. One strong run cannot finish two trees. After a crash you can double credits once; a break plays every six crashes, never mid-race.</span>
             </li>
             <li class="reveal">
               <b>Original</b>
@@ -202,7 +206,7 @@
             <article class="car reveal" style="--car: #39ff14">
               <div class="car-top">
                 <h3>Drift</h3>
-                <p class="unlock">Unlock at 900 m</p>
+                <p class="unlock">Unlock at 900 m · 800 cr</p>
               </div>
               <p>Snappier steering. Slightly lower top end.</p>
               <ul class="stats">
@@ -216,7 +220,7 @@
             <article class="car reveal" style="--car: #ff006e">
               <div class="car-top">
                 <h3>Surge</h3>
-                <p class="unlock">Unlock at 2,200 m</p>
+                <p class="unlock">Unlock at 2,200 m · 2,500 cr</p>
               </div>
               <p>Highest speed. Demands earlier decisions.</p>
               <ul class="stats">
@@ -271,9 +275,9 @@
           </div>
 
           <dl class="ramp">
-            <div class="reveal"><dt>1.55s <em>→</em> 0.72s</dt><dd>Spawn interval</dd></div>
-            <div class="reveal"><dt>78 <em>→</em> 168</dt><dd>Traffic kph</dd></div>
-            <div class="reveal"><dt>40% <em>→</em> 77%</dt><dd>Weavers at full swing</dd></div>
+            <div class="reveal"><dt>1.14s <em>→</em> 0.68s</dt><dd>Spawn interval</dd></div>
+            <div class="reveal"><dt>92 <em>→</em> 198</dt><dd>Traffic kph</dd></div>
+            <div class="reveal"><dt>10% <em>→</em> 48%</dt><dd>Weavers at full swing</dd></div>
             <div class="reveal"><dt>&times;1 <em>→</em> &times;8</dt><dd>Combo</dd></div>
           </dl>
         </div>
@@ -289,7 +293,7 @@
                 height="900"
                 loading="lazy"
                 decoding="async"
-                alt="Gameplay: the formula car at 248 kph in Harbor Lights, overtake and near-miss callouts on screen at combo times two."
+                alt="Gameplay: the formula car threading Harbor Lights traffic with near-miss and overtake callouts."
               />
               <figcaption>Harbor Lights · 248 kph · combo &times;2</figcaption>
             </figure>

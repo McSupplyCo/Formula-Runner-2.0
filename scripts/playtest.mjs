@@ -14,7 +14,7 @@ page.on("console", (msg) => {
   if (msg.type() === "error") errors.push(msg.text());
 });
 
-await page.goto("http://127.0.0.1:5174/?v=3", { waitUntil: "networkidle0", timeout: 20000 });
+await page.goto("http://127.0.0.1:5174/?v=3&debug=1", { waitUntil: "networkidle0", timeout: 20000 });
 await page.waitForSelector("#play");
 await new Promise((r) => setTimeout(r, 700));
 await page.screenshot({ path: "docs/screenshots/title-live.png" });

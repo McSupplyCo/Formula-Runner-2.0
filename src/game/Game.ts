@@ -8,20 +8,23 @@ import { hits, nearMissClearance } from "./collision";
 import { InputController } from "./input";
 import { clamp, damp, formatDistance, formatScore, headingOffset, laneCenter } from "./math";
 import { lanesBlockedNear, materializePattern, pickFairPattern, type TrafficCar } from "./patterns";
-import { commitRun, loadSave, writeSave, type SaveData } from "./save";
+import { applyDoubleReward, canDoubleReward, shouldShowInterstitial, type RewardGrant } from "./ads";
+import { commitRun, hasStoredSave, loadSave, writeSave, type SaveData } from "./save";
 import {
   buyCar,
   buyLivery,
   buyPart,
   carAvailable,
   carPartCap,
-  creditPayout,
   emptyCarGarage,
   fittedSpec,
   formatCredits,
   LIVERIES,
   ownsCar,
+  paintCar,
   PARTS,
+  partDelta,
+  partRequirement,
   partTotal,
   rankCost,
   upgradePool,
@@ -36,13 +39,19 @@ import {
   tickCombo,
 } from "./scoring";
 import { emptyRun, type GameMode, type RunStats } from "./state";
-import { BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD, SPAWN, type CarId } from "./tuning";
-import { createFormulaCar, createTrafficCar } from "./vehicles";
+import { ADS, BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD, SPAWN, type CarId } from "./tuning";
+import { createFormulaCar, createTrafficCar, disposeCar } from "./vehicles";
 import { TrackWorld, zoneAt } from "./world";
 import { makeNightEnv } from "./env";
 
 function hex(color: number) {
   return `#${color.toString(16).padStart(6, "0")}`;
+}
+
+function parseHex(value: string): number {
+  const raw = value.replace("#", "");
+  const n = Number.parseInt(raw, 16);
+  return Number.isFinite(n) ? n : 0x00e5ff;
 }
 
 type Toast = { text: string; life: number; color: string };
@@ -61,9 +70,15 @@ export class Game {
   fps = 60;
   lastBest = false;
   private lastCredits = 0;
+  private lastGrant: RewardGrant | null = null;
   private garageCar: CarId = "apex";
   private garageFrom: "title" | "results" = "title";
   private railReturn: "title" | "garage" | "results" = "title";
+  private buying = false;
+  private adTimer: number | null = null;
+  private adReturnFocus: HTMLElement | null = null;
+  private paintTimer: number | null = null;
+  private pendingBreak = false;
 
   private world: TrackWorld;
   private playerMesh: THREE.Group;
@@ -114,7 +129,8 @@ export class Game {
 
     this.world = new TrackWorld(this.scene);
     const paint = fittedSpec(this.save, this.save.selectedCar);
-    this.playerMesh = createFormulaCar(paint.color, paint.accent);
+    this.playerMesh = createFormulaCar(paint.color, paint.accent, paint.secondary);
+    this.playerMesh.userData.paintKey = this.paintKey(this.save.selectedCar);
     this.scene.add(this.playerMesh);
     this.speedLines = this.makeSpeedLines();
     this.speedLines.visible = false;
@@ -131,6 +147,10 @@ export class Game {
 
     this.input.attach(canvas);
     this.bindUi();
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches && !hasStoredSave()) {
+      this.save.reducedMotion = true;
+      (this.ui.motion as HTMLInputElement).checked = true;
+    }
     this.showRailPanel("title");
     this.resize();
     requestAnimationFrame(() => this.resize());
@@ -144,6 +164,8 @@ export class Game {
   }
 
   startRun() {
+    if (this.adTimer !== null) return;
+    if (this.consumeBreak("run")) return;
     void this.audio.resume();
     this.audio.playUi();
     this.run = emptyRun();
@@ -155,6 +177,7 @@ export class Game {
     this.crashTimer = 0;
     this.shake = 0;
     this.lastBest = false;
+    this.applyCar(this.save.selectedCar);
     this.resetFeel();
     this.mode = "countdown";
     this.audio.startEngine();
@@ -178,11 +201,30 @@ export class Game {
       this.fps = this.frames / this.fpsAccum;
       this.frames = 0;
       this.fpsAccum = 0;
+      this.adaptQuality();
     }
     if (!this.hidden) this.simulate(dt);
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   };
+
+  private quality = 1;
+  private qualityHold = 0;
+
+  private adaptQuality() {
+    if (this.qualityHold > 0) this.qualityHold -= 1;
+    if (this.fps < 26 && this.quality > 0) {
+      this.quality = 0;
+      this.qualityHold = 20;
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.1));
+      this.disposeBloom();
+    } else if (this.qualityHold === 0 && this.fps > 54 && this.quality === 0) {
+      this.quality = 1;
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+      if (!this.composer) this.setupBloom();
+      this.resize();
+    }
+  }
 
   private simulate(dt: number) {
     const input = this.input.consume();
@@ -249,7 +291,7 @@ export class Game {
 
     const speedMs = this.player.speed / 3.6;
     const speedT = clamp(this.player.speed / car.topSpeed, 0, 1);
-    const authority = 1 - DRIVE.highSpeedSteerLoss * speedT;
+    const authority = 1 - DRIVE.highSpeedSteerLoss * speedT * car.steerLossScale;
     this.player.vx = damp(this.player.vx, steer * car.steer * authority, car.grip, dt);
     let nextX = this.player.x + this.player.vx * dt;
     if (nextX > ROAD.driveLimit) {
@@ -410,47 +452,64 @@ export class Game {
     this.mode = "crashed";
     this.crashTimer = 0.85;
     this.run.boosting = false;
-    this.shake = 0.14;
+    this.shake = 0.18;
     this.audio.playCrash();
     this.buzz(40);
+    this.burstCrash();
   }
 
   private openResults() {
     this.mode = "results";
+    if (this.run.settled) {
+      this.setVisible("hud", false);
+      this.setVisible("touch", false);
+      this.setPlayingLayout(false);
+      this.showRailPanel("results");
+      this.renderResults();
+      this.renderTitle();
+      this.queueBreak();
+      return;
+    }
+    this.run.settled = true;
     const previous = this.save.bestScore;
-    this.lastCredits = creditPayout({
-      distance: this.run.distance,
-      nearMisses: this.run.nearMisses,
-      overtakes: this.run.overtakes,
-      personalBest: this.run.score > previous,
-    });
-    this.save = commitRun(this.save, {
+    const settled = commitRun(this.save, {
+      id: this.run.id,
       score: this.run.score,
       distance: this.run.distance,
       combo: this.run.maxCombo,
       nearMisses: this.run.nearMisses,
       overtakes: this.run.overtakes,
     });
+    this.save = settled.save;
+    this.lastCredits = settled.earned;
+    this.lastGrant = settled.duplicate
+      ? { runId: this.run.id, baseCredits: 0, doubled: true }
+      : { runId: this.run.id, baseCredits: settled.earned, doubled: this.save.lastRewardRunId === this.run.id };
     writeSave(this.save);
     this.lastBest = this.run.score > previous;
     if (this.lastBest) this.audio.playBest();
+    if (settled.earned > 0) this.audio.playCoin();
     this.setVisible("hud", false);
     this.setVisible("touch", false);
     this.setPlayingLayout(false);
     this.showRailPanel("results");
     this.renderResults();
     this.renderTitle();
+    this.queueBreak();
   }
 
   private setPause(paused: boolean) {
     this.mode = paused ? "paused" : "playing";
     this.setVisible("pause", paused);
-    if (paused) this.audio.update(0, false);
+    if (paused) {
+      this.audio.update(0, false);
+      this.ui.resume.focus();
+    }
   }
 
   private sync(dt: number) {
     this.playerMesh.position.set(this.player.x, this.chassis.y, this.player.z);
-    this.playerMesh.rotation.set(0, -this.player.yaw, 0);
+    this.playerMesh.rotation.set(this.chassis.pitch, -this.player.yaw, this.chassis.roll);
     for (const car of this.traffic) {
       const mesh = this.trafficMeshes.get(car);
       if (!mesh) continue;
@@ -584,6 +643,7 @@ export class Game {
   }
 
   private setupBloom() {
+    this.disposeBloom();
     try {
       const composer = new EffectComposer(this.renderer);
       composer.addPass(new RenderPass(this.scene, this.camera));
@@ -598,9 +658,15 @@ export class Game {
       this.composer = composer;
       this.bloomPass = bloom;
     } catch {
-      this.composer = null;
-      this.bloomPass = null;
+      this.disposeBloom();
     }
+  }
+
+  private disposeBloom() {
+    this.composer?.dispose();
+    this.bloomPass?.dispose();
+    this.composer = null;
+    this.bloomPass = null;
   }
 
   private acquire(kind: TrafficCar["kind"]) {
@@ -795,6 +861,7 @@ export class Game {
     this.ui.toast.innerHTML = this.toasts
       .map((toast) => `<div style="color:${toast.color}">${toast.text}</div>`)
       .join("");
+    this.ui.hud.dataset.speed = this.save.hudSpeedSide;
   }
 
   private gearLabel(speed: number) {
@@ -814,7 +881,7 @@ export class Game {
       const spec = fittedSpec(this.save, car.id);
       const ranks = partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id));
       let status: string;
-      if (owned) status = `${Math.round(spec.topSpeed)} kph · ${ranks} / ${carPartCap()} ranks`;
+      if (owned) status = `${Math.round(spec.topSpeed)} kph · ${ranks} / ${carPartCap()}`;
       else if (available) status = `Buy · ${formatCredits(car.unlockCost)}`;
       else status = `Unlock at ${car.unlockBest.toLocaleString("en-US")} m`;
       const locked = !owned && !available;
@@ -840,13 +907,34 @@ export class Game {
     this.ui.resultBest.textContent = this.lastBest ? "New personal best" : "Run complete";
     this.ui.resultBest.classList.toggle("gold", this.lastBest);
     this.ui.resultCredits.textContent = `+${formatCredits(this.lastCredits)}  ·  ${formatCredits(this.save.credits)} in wallet`;
+    const canDouble = canDoubleReward(this.lastGrant);
+    this.ui.resultDouble?.toggleAttribute("disabled", !canDouble);
+    this.ui.resultDouble?.classList.toggle("hidden", !canDouble && Boolean(this.lastGrant?.doubled));
+    if (this.ui.resultAdNote) {
+      this.ui.resultAdNote.textContent = canDouble
+        ? "Watch a short placement to double this payout. Once per run."
+        : this.lastGrant?.doubled
+          ? "Credits already doubled for this run."
+          : "";
+    }
   }
 
   private renderGarage() {
     const row = this.save.garage[this.garageCar] ?? emptyCarGarage(this.garageCar);
     if (this.ui.garageCredits) this.ui.garageCredits.textContent = formatCredits(this.save.credits);
     if (this.ui.garageLadder) {
-      this.ui.garageLadder.textContent = `${upgradePool()} upgrades · ${MAX_PART_RANK} ranks per part`;
+      this.ui.garageLadder.textContent =
+        this.save.totalRuns === 0 && this.save.credits === 0
+          ? "Race to earn credits · 12 ranks per part"
+          : `${upgradePool()} upgrades · ${MAX_PART_RANK} ranks per part`;
+    }
+    const spec = fittedSpec(this.save, this.garageCar);
+    if (this.ui.garageSpecs) {
+      this.ui.garageSpecs.innerHTML = `
+        <div><dt>Top speed</dt><dd>${Math.round(spec.topSpeed)} kph</dd></div>
+        <div><dt>Accel</dt><dd>${spec.accel.toFixed(1)}</dd></div>
+        <div><dt>Steer</dt><dd>${spec.steer.toFixed(1)}</dd></div>
+        <div><dt>Boost fill</dt><dd>${spec.boostNearMissCharge.toFixed(2)}</dd></div>`;
     }
     if (this.ui.garageCars) {
       this.ui.garageCars.innerHTML = CARS.map((car) => {
@@ -855,7 +943,7 @@ export class Game {
         const available = carAvailable(this.save, car.id);
         const locked = !owned && !available;
         const label = owned
-          ? `${partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id))} / ${carPartCap()} ranks`
+          ? `${partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id))} / ${carPartCap()}`
           : available
             ? `Buy · ${formatCredits(car.unlockCost)}`
             : `Unlock at ${car.unlockBest.toLocaleString("en-US")} m`;
@@ -874,13 +962,16 @@ export class Game {
             const maxed = rank >= MAX_PART_RANK;
             const cost = rankCost(rank + 1);
             const pct = Math.round((rank / MAX_PART_RANK) * 100);
-            return `<button class="part" data-part="${part.id}" ${maxed ? "disabled" : ""}>
+            const locked = !maxed ? partRequirement(row, part.id, rank + 1) : null;
+            const next = !maxed && !locked ? partDelta(part.id, rank, rank + 1) : locked ?? "Maxed";
+            return `<button class="part ${locked ? "locked-req" : ""}" data-part="${part.id}" ${maxed || locked ? "disabled" : ""}>
               <div>
                 <strong>${part.name}</strong>
-                <span>${part.blurb}</span>
+                <span>${part.blurb} · ${part.impact}</span>
+                <span class="next">${next}</span>
                 <div class="rank-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
               </div>
-              <em>${maxed ? `Rank ${MAX_PART_RANK} / ${MAX_PART_RANK}` : `Rank ${rank} / ${MAX_PART_RANK} · ${formatCredits(cost)}`}</em>
+              <em>${maxed ? `Rank ${MAX_PART_RANK} / ${MAX_PART_RANK}` : locked ? `Locked` : `Rank ${rank} / ${MAX_PART_RANK} · ${formatCredits(cost)}`}</em>
             </button>`;
           }).join("")
         : `<p class="hint">Buy this car before you can spec it.</p>`;
@@ -899,12 +990,36 @@ export class Game {
             .join("")
         : "";
     }
+    const primary = this.ui.paintPrimary as HTMLInputElement | undefined;
+    const secondary = this.ui.paintSecondary as HTMLInputElement | undefined;
+    const accent = this.ui.paintAccent as HTMLInputElement | undefined;
+    if (primary && secondary && accent) {
+      const painting = document.activeElement === primary || document.activeElement === secondary || document.activeElement === accent;
+      if (!painting) {
+        primary.value = hex(row.primary);
+        secondary.value = hex(row.secondary);
+        accent.value = hex(row.accent);
+      }
+      this.ui.garagePaint?.classList.toggle("hidden", !owned);
+    }
+  }
+
+  private paintKey(id: CarId) {
+    const spec = fittedSpec(this.save, id);
+    return `${id}:${spec.color}:${spec.secondary}:${spec.accent}`;
   }
 
   private applyCar(id: CarId) {
     const spec = fittedSpec(this.save, id);
-    this.scene.remove(this.playerMesh);
-    this.playerMesh = createFormulaCar(spec.color, spec.accent);
+    const key = this.paintKey(id);
+    if (this.playerMesh.userData.paintKey === key) return;
+    const prev = this.playerMesh;
+    this.scene.remove(prev);
+    disposeCar(prev);
+    this.playerMesh = createFormulaCar(spec.color, spec.accent, spec.secondary);
+    this.playerMesh.userData.paintKey = key;
+    this.playerMesh.position.copy(prev.position);
+    this.playerMesh.rotation.copy(prev.rotation);
     this.scene.add(this.playerMesh);
   }
 
@@ -913,7 +1028,10 @@ export class Game {
     this.garageCar = this.save.selectedCar;
     this.showRailPanel("garage");
     if (this.ui.garageHint) {
-      this.ui.garageHint.textContent = `Each buy is a small step. Full spec is ${carPartCap()} ranks on this car, ${upgradePool()} across the grid.`;
+      this.ui.garageHint.textContent =
+        this.save.totalRuns === 0 && this.save.credits === 0
+          ? "Race first. Credits come from distance, near misses, and overtakes — not from this screen."
+          : `Ranks 1–3 are open. Later ranks need a spread setup. Full spec is ${carPartCap()} on this car.`;
     }
     this.renderGarage();
   }
@@ -928,7 +1046,8 @@ export class Game {
     if (this.ui.garageHint) this.ui.garageHint.textContent = hint;
     if (!ok) return;
     writeSave(this.save);
-    this.audio.playUi();
+    this.audio.playUpgrade();
+    this.applyCar(this.save.selectedCar);
     this.renderGarage();
     this.renderTitle();
     this.renderResults();
@@ -984,9 +1103,13 @@ export class Game {
     this.ui.garageParts?.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-part]");
       if (!button || button.disabled) return;
+      if (this.buying) return;
+      this.buying = true;
       const result = buyPart(this.save, this.garageCar, button.dataset.part as PartId);
       this.save = result.save;
       this.persistGarage(result.hint, result.ok);
+      if (result.ok) button.classList.add("bought");
+      this.buying = false;
     });
     this.ui.garageLiveries?.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-livery]");
@@ -995,20 +1118,43 @@ export class Game {
       this.save = result.save;
       this.persistGarage(result.hint, result.ok);
     });
+    this.ui.resultDouble?.addEventListener("click", () => this.claimDouble());
+    const onPaint = () => {
+      if (!ownsCar(this.save, this.garageCar) || this.buying) return;
+      const primary = parseHex((this.ui.paintPrimary as HTMLInputElement).value);
+      const secondary = parseHex((this.ui.paintSecondary as HTMLInputElement).value);
+      const accent = parseHex((this.ui.paintAccent as HTMLInputElement).value);
+      this.save = paintCar(this.save, this.garageCar, primary, secondary, accent);
+      writeSave(this.save);
+      if (this.paintTimer !== null) window.clearTimeout(this.paintTimer);
+      this.paintTimer = window.setTimeout(() => {
+        this.paintTimer = null;
+        this.renderGarage();
+        this.renderTitle();
+      }, 60);
+    };
+    this.ui.paintPrimary?.addEventListener("input", onPaint);
+    this.ui.paintSecondary?.addEventListener("input", onPaint);
+    this.ui.paintAccent?.addEventListener("input", onPaint);
 
     const sfx = this.ui.sfx as HTMLInputElement;
     const music = this.ui.music as HTMLInputElement;
     const motion = this.ui.motion as HTMLInputElement;
     const haptics = this.ui.haptics as HTMLInputElement;
+    const hudSpeed = this.ui.hudSpeed as HTMLSelectElement;
     sfx.value = String(this.save.sfxVolume);
     music.value = String(this.save.musicVolume);
     motion.checked = this.save.reducedMotion;
     haptics.checked = this.save.haptics;
+    hudSpeed.value = this.save.hudSpeedSide;
+    this.ui.hud.dataset.speed = this.save.hudSpeedSide;
     const persist = () => {
       this.save.sfxVolume = Number(sfx.value);
       this.save.musicVolume = Number(music.value);
       this.save.reducedMotion = motion.checked;
       this.save.haptics = haptics.checked;
+      this.save.hudSpeedSide = hudSpeed.value === "right" ? "right" : "left";
+      this.ui.hud.dataset.speed = this.save.hudSpeedSide;
       this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
       writeSave(this.save);
     };
@@ -1016,15 +1162,96 @@ export class Game {
     music.addEventListener("input", persist);
     motion.addEventListener("change", persist);
     haptics.addEventListener("change", persist);
+    hudSpeed.addEventListener("change", persist);
     this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
 
     this.ui.brakeBtn.addEventListener("pointerdown", () => this.input.setBrakeButton(true));
     window.addEventListener("pointerup", () => this.input.setBrakeButton(false));
-    this.ui.boostBtn.addEventListener("pointerdown", () => this.input.setBoostButton(true));
+    this.ui.boostBtn.addEventListener("pointerdown", (event) => {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+      this.input.setBoostButton(true);
+    });
     this.ui.boostBtn.addEventListener("pointerup", () => this.input.setBoostButton(false));
+    this.ui.boostBtn.addEventListener("pointercancel", () => this.input.setBoostButton(false));
+  }
+
+  private claimDouble() {
+    if (!this.lastGrant || this.adTimer !== null) return;
+    if (!canDoubleReward(this.lastGrant)) return;
+    this.playPlacement("rewarded", () => {
+      if (!this.lastGrant) return;
+      const result = applyDoubleReward(this.save, this.lastGrant);
+      this.save = result.save;
+      this.lastGrant = result.grant;
+      if (result.ok) {
+        this.lastCredits *= 2;
+        this.save.lastRewardRunId = result.grant.runId;
+        writeSave(this.save);
+        this.audio.playCoin();
+      }
+      this.renderResults();
+      this.renderTitle();
+    });
+  }
+
+  private queueBreak() {
+    this.pendingBreak = shouldShowInterstitial(this.save.crashCount);
+  }
+
+  private consumeBreak(next: "run" | "title"): boolean {
+    if (!this.pendingBreak || this.adTimer !== null) return false;
+    this.pendingBreak = false;
+    this.playPlacement("break", () => {
+      if (next === "run") this.startRun();
+      else this.toTitle();
+    });
+    return true;
+  }
+
+  private playPlacement(kind: "rewarded" | "break", onDone: () => void) {
+    if (this.adTimer !== null) return;
+    const overlay = this.ui.interstitial;
+    const status = this.ui.adStatus;
+    const bar = this.ui.adBar;
+    overlay.classList.remove("hidden");
+    this.setAdChrome(true);
+    if (status) status.textContent = kind === "rewarded" ? "Rewarded placement…" : "Break placement…";
+    if (bar) {
+      bar.style.animation = "none";
+      void bar.offsetWidth;
+      bar.style.animation = "";
+    }
+    const ms = kind === "rewarded" ? ADS.rewardedMs : ADS.interstitialMs;
+    this.adTimer = window.setTimeout(() => {
+      this.adTimer = null;
+      overlay.classList.add("hidden");
+      this.setAdChrome(false);
+      onDone();
+    }, ms);
+  }
+
+  private setAdChrome(active: boolean) {
+    this.ui.shell.toggleAttribute("inert", active);
+    this.ui.stage.toggleAttribute("inert", active);
+    this.ui.shell.setAttribute("aria-hidden", String(active));
+    this.ui.stage.setAttribute("aria-hidden", String(active));
+    if (active) {
+      this.adReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this.ui.interstitial.tabIndex = -1;
+      this.ui.interstitial.focus();
+    } else {
+      this.adReturnFocus?.focus();
+      this.adReturnFocus = null;
+    }
+  }
+
+  private burstCrash() {
+    this.shake = Math.max(this.shake, 0.18);
+    this.pushToast("CONTACT", "#ff8a9a");
   }
 
   private toTitle() {
+    if (this.consumeBreak("title")) return;
     this.mode = "title";
     this.audio.stopEngine();
     this.setVisible("results", false);

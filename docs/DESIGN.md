@@ -25,6 +25,10 @@ Title → Race → countdown → auto-accelerate and steer → near-miss / overt
 
 Auto-accel, analog steer, optional brake, authored traffic with gaps, speed-scaled look-ahead, near-miss combo, overtake score, boost, three original cars, pause, settings, versioned save.
 
+## Progression (2026-08-27)
+
+Four parts — Engine, Tires, Turbo, Aero — twelve ranks each. Costs grow exponentially. Higher ranks need a spread setup. One strong run cannot complete two trees. Credits cap at 900 per run. A rewarded placement may double a finished run once. Interstitials appear every six crashes, never during a race.
+
 ## Architecture
 
 Unity 1.0 stays in `Assets/`. 2.0 is a Vite + TypeScript + Three.js web game so it can be played and verified without the Unity Editor.
@@ -35,4 +39,4 @@ Headless Chrome 1440×900: 60fps, 512 m run, score ~1979, 2 near misses, 2 overt
 
 ## Deferred
 
-Ads, 100-level upgrades, daily challenges, IAP, multiplayer, realistic physics, licensed brands, curved spline circuits.
+Daily challenges, IAP, multiplayer, realistic physics, licensed brands, curved spline circuits.

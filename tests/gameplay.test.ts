@@ -13,6 +13,7 @@ import {
   carPartCap,
   creditPayout,
   fittedSpec,
+  paintCar,
   rankCost,
   upgradePool,
 } from "../src/game/garage";
@@ -90,7 +91,7 @@ describe("scoring", () => {
 
 describe("save migration", () => {
   it("creates defaults from empty data", () => {
-    expect(migrateSave(null).version).toBe(3);
+    expect(migrateSave(null).version).toBe(4);
     expect(migrateSave({}).selectedCar).toBe("apex");
     expect(migrateSave({}).credits).toBe(0);
     expect(migrateSave({}).ownedCars).toEqual(["apex"]);
@@ -99,12 +100,12 @@ describe("save migration", () => {
   it("keeps a v1 best distance", () => {
     const next = migrateSave({ bestDistance: 1400, version: 1 });
     expect(next.bestDistance).toBe(1400);
-    expect(next.version).toBe(3);
+    expect(next.version).toBe(4);
     expect(next.ownedCars).toEqual(["apex"]);
   });
 
   it("does not gift cars on a long run", () => {
-    const save = commitRun(defaultSave(), { score: 9000, distance: 2300, combo: 4, nearMisses: 2, overtakes: 1 });
+    const save = commitRun(defaultSave(), { score: 9000, distance: 2300, combo: 4, nearMisses: 2, overtakes: 1 }).save;
     expect(save.ownedCars).toEqual(["apex"]);
     expect(save.bestDistance).toBe(2300);
     expect(save.credits).toBeGreaterThan(0);
@@ -123,33 +124,43 @@ describe("garage", () => {
   });
 
   it("buys one part rank and refuses if broke", () => {
-    const broke = buyPart(defaultSave(), "apex", "power");
+    const broke = buyPart(defaultSave(), "apex", "engine");
     expect(broke.ok).toBe(false);
     const funded = { ...defaultSave(), credits: 200 };
-    const bought = buyPart(funded, "apex", "power");
+    const bought = buyPart(funded, "apex", "engine");
     expect(bought.ok).toBe(true);
-    expect(bought.save.garage.apex.power).toBe(1);
+    expect(bought.save.garage.apex.engine).toBe(1);
     expect(bought.save.credits).toBe(200 - rankCost(1));
     expect(fittedSpec(bought.save, "apex").accel).toBeGreaterThan(fittedSpec(funded, "apex").accel);
   });
 
   it("keeps each rank small and spreads upgrades across a long ladder", () => {
-    expect(upgradePool()).toBe(252);
-    expect(carPartCap()).toBe(84);
+    expect(upgradePool()).toBe(144);
+    expect(carPartCap()).toBe(48);
     expect(carPartCap()).toBe(MAX_PART_RANK * 4);
-    expect(rankCost(1)).toBeLessThan(40);
-    expect(rankCost(MAX_PART_RANK)).toBeGreaterThan(rankCost(1) * 8);
+    expect(rankCost(1)).toBeGreaterThan(60);
+    expect(rankCost(1)).toBeLessThan(80);
+    expect(rankCost(MAX_PART_RANK)).toBeGreaterThan(rankCost(1) * 4);
     const stock = fittedSpec(defaultSave(), "apex");
-    const one = buyPart({ ...defaultSave(), credits: 500 }, "apex", "power").save;
-    expect(fittedSpec(one, "apex").accel - stock.accel).toBeLessThan(1.2);
+    const one = buyPart({ ...defaultSave(), credits: 500 }, "apex", "engine").save;
+    expect(fittedSpec(one, "apex").accel - stock.accel).toBeLessThan(2.2);
     const maxed = {
       ...defaultSave(),
       garage: {
         ...defaultSave().garage,
-        apex: { ...defaultSave().garage.apex, power: MAX_PART_RANK },
+        apex: { ...defaultSave().garage.apex, engine: MAX_PART_RANK },
       },
     };
     expect(fittedSpec(maxed, "apex").accel - stock.accel).toBeGreaterThan(15);
+  });
+
+  it("keeps true black paint instead of falling back to stock cyan", () => {
+    const painted = paintCar(defaultSave(), "apex", 0, 0, 0);
+    const spec = fittedSpec(painted, "apex");
+    expect(spec.color).toBe(0);
+    expect(spec.secondary).toBe(0);
+    expect(spec.accent).toBe(0);
+    expect(painted.garage.apex.livery).toBe("apex-custom");
   });
 
   it("requires distance and credits before selling Drift", () => {
@@ -161,7 +172,7 @@ describe("garage", () => {
     expect(paid.ok).toBe(true);
     expect(paid.save.ownedCars).toContain("drift");
     expect(paid.save.credits).toBe(0);
-    expect(paid.save.garage.drift.power).toBe(0);
+    expect(paid.save.garage.drift.engine).toBe(0);
   });
 });
 
@@ -253,6 +264,8 @@ describe("state", () => {
     expect(run.score).toBe(0);
     expect(run.combo).toBe(0);
     expect(run.boosting).toBe(false);
+    expect(run.id.length).toBeGreaterThan(4);
+    expect(run.settled).toBe(false);
   });
 });
 

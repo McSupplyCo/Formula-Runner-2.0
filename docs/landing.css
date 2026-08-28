@@ -34,7 +34,7 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--midnight);
   color: var(--ink);
-  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: Manrope, system-ui, -apple-system, sans-serif;
   font-size: 17px;
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
@@ -49,7 +49,7 @@ a { color: inherit; }
 /* ---------- shared type ---------- */
 
 .display {
-  font-family: Orbitron, "DM Sans", sans-serif;
+  font-family: "Barlow Condensed", Manrope, sans-serif;
   text-transform: uppercase;
   letter-spacing: -0.02em;
   line-height: 0.95;
@@ -57,7 +57,7 @@ a { color: inherit; }
 }
 
 .kicker {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -67,7 +67,7 @@ a { color: inherit; }
 .kicker.muted { color: var(--dimmer); }
 
 h2 {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: -0.01em;
@@ -76,7 +76,7 @@ h2 {
 }
 
 h3 {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -120,7 +120,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   background: var(--cyan);
   color: #041018;
   padding: 12px 18px;
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 12px;
   text-transform: uppercase;
 }
@@ -151,7 +151,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   display: inline-flex;
   align-items: baseline;
   gap: 0.55rem;
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-weight: 800;
   font-size: 13px;
   letter-spacing: 0.16em;
@@ -196,7 +196,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   gap: 0.7rem;
   padding: 1.05rem 1.7rem;
   border: 0;
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-weight: 700;
   font-size: 13px;
   letter-spacing: 0.13em;
@@ -260,17 +260,12 @@ section[id] { scroll-margin-top: 5.5rem; }
 /* static composed frame: shown under the canvas, and on its own if WebGL is unavailable */
 .hero-fallback {
   background:
-    radial-gradient(120% 60% at 50% 58%, rgba(0, 229, 255, 0.18) 0%, transparent 58%),
-    radial-gradient(80% 40% at 50% 60%, rgba(0, 229, 255, 0.1) 0%, transparent 70%),
-    linear-gradient(180deg, #05101d 0%, #071426 46%, #0a1a2c 60%, #060d18 100%);
+    linear-gradient(180deg, rgba(6, 13, 24, 0.42) 0%, rgba(6, 13, 24, 0.18) 38%, rgba(6, 13, 24, 0.55) 100%),
+    url("screenshots/playing.png") center 46% / cover no-repeat,
+    #060d18;
 }
 .hero-fallback::after {
-  content: "";
-  position: absolute;
-  inset: 58% 0 0 0;
-  background: linear-gradient(180deg, rgba(0, 229, 255, 0.16), transparent 70%);
-  clip-path: polygon(50% 0, 53% 0, 100% 100%, -30% 100%);
-  opacity: 0.5;
+  content: none;
 }
 
 .hero-scrim {
@@ -296,7 +291,7 @@ section[id] { scroll-margin-top: 5.5rem; }
 
 
 .hero h1 {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-weight: 800;
   text-transform: uppercase;
   font-size: clamp(2.75rem, 8.4vw, 7rem);
@@ -321,7 +316,7 @@ section[id] { scroll-margin-top: 5.5rem; }
 }
 .hero-meta div { padding: 0.2rem 0; }
 .hero-meta dt {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: clamp(1.35rem, 2.6vw, 2rem);
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -359,7 +354,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   gap: 2.6rem;
   padding-right: 2.6rem;
   list-style: none;
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.24em;
@@ -400,7 +395,7 @@ section[id] { scroll-margin-top: 5.5rem; }
 .step:hover { background: var(--panel); }
 .step:hover::before { width: 100%; }
 .step .num {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -419,7 +414,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   font-size: 15.5px;
 }
 .facts b {
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -473,7 +468,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   transition: width var(--dur-slow) var(--ease-out);
 }
 .is-visible .stats .bar i { width: var(--w); }
-.stats .val { font-family: Orbitron, sans-serif; font-size: 12px; text-align: right; color: var(--ink); }
+.stats .val { font-family: "Barlow Condensed", sans-serif; font-size: 12px; text-align: right; color: var(--ink); }
 
 /* ---------- zones ---------- */
 
@@ -496,7 +491,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   margin-bottom: 0.7rem;
 }
 .zone h3 { font-size: 0.98rem; color: var(--ink); }
-.zone .dist { font-family: Orbitron, sans-serif; font-size: 12px; letter-spacing: 0.1em; color: var(--z); }
+.zone .dist { font-family: "Barlow Condensed", sans-serif; font-size: 12px; letter-spacing: 0.1em; color: var(--z); }
 .zone p { color: var(--dim); font-size: 14.5px; line-height: 1.6; }
 
 .ramp {
@@ -508,7 +503,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   border-top: 1px solid var(--line-soft);
 }
 .ramp div { display: flex; flex-direction: column; gap: 0.35rem; }
-.ramp dt { font-family: Orbitron, sans-serif; font-size: 1.4rem; font-weight: 700; }
+.ramp dt { font-family: "Barlow Condensed", sans-serif; font-size: 1.4rem; font-weight: 700; }
 .ramp dt em { font-style: normal; color: var(--dimmer); }
 .ramp dd { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dimmer); }
 
@@ -531,7 +526,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   right: 0;
   padding: 2.5rem 1.25rem 1rem;
   background: linear-gradient(180deg, transparent, rgba(6, 13, 24, 0.92));
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -557,7 +552,7 @@ section[id] { scroll-margin-top: 5.5rem; }
   gap: 0.6rem;
   padding: 0.85rem 1.15rem;
   border-bottom: 1px solid var(--line);
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 10px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -579,7 +574,7 @@ section[id] { scroll-margin-top: 5.5rem; }
 .keys { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .keys th {
   text-align: left;
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -592,7 +587,7 @@ section[id] { scroll-margin-top: 5.5rem; }
 .keys td:first-child { width: 48%; padding-right: 1rem; }
 .keys kbd {
   display: inline-block;
-  font-family: Orbitron, sans-serif;
+  font-family: "Barlow Condensed", sans-serif;
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--ink);

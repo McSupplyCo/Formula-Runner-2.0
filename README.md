@@ -30,7 +30,10 @@ Open the local URL, then click **Race**.
 - Auto-accelerate. Steering is independent of throttle.
 - Score from distance, speed, near misses, and overtakes.
 - Boost charges from near misses.
+- Garage: Engine, Tires, Turbo, Aero — 12 ranks each, paced across many runs.
+- After a run you can double credits once. Breaks appear every six crashes, never mid-race.
 - Three original cars: Apex, Drift, Surge.
+- Custom primary / secondary / accent paint. Tires stay rubber.
 - No licensed F1 teams, tracks, or audio.
 
 ## Checks

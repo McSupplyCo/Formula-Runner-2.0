@@ -5,9 +5,11 @@ import {
   makeBarrierTexture,
   makeBillboardTexture,
   makeBuildingTexture,
+  makeDistanceBoard,
   makeGantrySign,
   makeGravelTexture,
   makeKerbTexture,
+  makeMarshalBoard,
   makeRoadRoughness,
   makeRoadTexture,
   makeShedTexture,
@@ -20,13 +22,72 @@ export type Zone = {
   horizon: number;
   neon: number;
   window: string;
+  top: number;
+  glow: number;
+  fogDensity: number;
+  cityEmit: number;
+  cityBoost: number;
+  lamp: number;
+  star: number;
 };
 
 export const ZONES: Zone[] = [
-  { name: "Harbor Lights", fog: 0x07141f, horizon: 0x123044, neon: BRAND.cyan, window: "#7ad7ff" },
-  { name: "Neon Cut", fog: 0x120814, horizon: 0x3a1040, neon: BRAND.magenta, window: "#ff7ab8" },
-  { name: "Storm Ribbon", fog: 0x061816, horizon: 0x0e3040, neon: BRAND.green, window: "#9cff7a" },
-  { name: "Apex Void", fog: 0x08070c, horizon: 0x101828, neon: BRAND.gold, window: "#ffe08a" },
+  {
+    name: "Harbor Lights",
+    fog: 0x07141f,
+    horizon: 0x123044,
+    neon: BRAND.cyan,
+    window: "#7ad7ff",
+    top: 0x02050b,
+    glow: 0.045,
+    fogDensity: 0.0032,
+    cityEmit: 0.24,
+    cityBoost: 0.36,
+    lamp: 0xffe4bc,
+    star: 0.48,
+  },
+  {
+    name: "Neon Cut",
+    fog: 0x160610,
+    horizon: 0x4a1238,
+    neon: BRAND.magenta,
+    window: "#ff7ab8",
+    top: 0x0a0312,
+    glow: 0.13,
+    fogDensity: 0.0038,
+    cityEmit: 0.4,
+    cityBoost: 0.62,
+    lamp: 0xffc4d8,
+    star: 0.22,
+  },
+  {
+    name: "Storm Ribbon",
+    fog: 0x041814,
+    horizon: 0x0c3c38,
+    neon: BRAND.green,
+    window: "#9cff7a",
+    top: 0x02110e,
+    glow: 0.1,
+    fogDensity: 0.0044,
+    cityEmit: 0.32,
+    cityBoost: 0.5,
+    lamp: 0xd4f4e4,
+    star: 0.18,
+  },
+  {
+    name: "Apex Void",
+    fog: 0x06050a,
+    horizon: 0x1c1608,
+    neon: BRAND.gold,
+    window: "#ffe08a",
+    top: 0x010103,
+    glow: 0.055,
+    fogDensity: 0.0026,
+    cityEmit: 0.14,
+    cityBoost: 0.22,
+    lamp: 0xffe2a8,
+    star: 0.72,
+  },
 ];
 
 export function zoneAt(distance: number): Zone {
@@ -77,15 +138,26 @@ export class TrackWorld {
   private ground: THREE.Mesh;
   private streetLights: THREE.SpotLight[] = [];
   private lightTint = new THREE.Color(0xffe4bc);
+  private hemi: THREE.HemisphereLight;
+  private moon: THREE.DirectionalLight;
   private towerMat: THREE.MeshStandardMaterial;
   private slabMat: THREE.MeshStandardMaterial;
+  private horizonMat!: THREE.MeshStandardMaterial;
   private eyeMat: THREE.MeshStandardMaterial;
+  private starMat!: THREE.PointsMaterial;
   private zoneTint = new THREE.Color();
+  private postGeo: THREE.BoxGeometry;
+  private signPostGeo: THREE.BoxGeometry;
+  private marshalGeo: THREE.PlaneGeometry;
+  private distGeo: THREE.PlaneGeometry;
+  private postMat: THREE.MeshStandardMaterial;
+  private marshalMats: THREE.MeshStandardMaterial[] = [];
+  private distMats: THREE.MeshStandardMaterial[] = [];
 
   constructor(private scene: THREE.Scene) {
-    this.fog = new THREE.FogExp2(ZONES[0].fog, 0.0035);
+    this.fog = new THREE.FogExp2(ZONES[0].fog, ZONES[0].fogDensity);
     scene.fog = this.fog;
-    scene.background = new THREE.Color(ZONES[0].fog);
+    scene.background = this.fog.color;
 
     this.roadMat = new THREE.MeshPhysicalMaterial({
       map: makeRoadTexture(),
@@ -144,14 +216,53 @@ export class TrackWorld {
       metalness: 0.2,
     });
 
-    const hemi = new THREE.HemisphereLight(0x7a96b4, 0x080c12, 0.55);
-    const moon = new THREE.DirectionalLight(0xc8d8ee, 0.68);
-    moon.position.set(-18, 42, 10);
+    this.hemi = new THREE.HemisphereLight(0x7a96b4, 0x080c12, 0.55);
+    this.moon = new THREE.DirectionalLight(0xc8d8ee, 0.68);
+    this.moon.position.set(-18, 42, 10);
     const fill = new THREE.DirectionalLight(0x1a3040, 0.16);
     fill.position.set(14, 8, -10);
-    scene.add(hemi, moon, fill);
+    scene.add(this.hemi, this.moon, fill);
 
-    for (let i = 0; i < 8; i++) {
+    this.postGeo = new THREE.BoxGeometry(0.08, 0.62, 0.08);
+    this.signPostGeo = new THREE.BoxGeometry(0.06, 1.2, 0.06);
+    this.marshalGeo = new THREE.PlaneGeometry(0.9, 0.72);
+    this.distGeo = new THREE.PlaneGeometry(1.05, 0.78);
+    this.postMat = new THREE.MeshStandardMaterial({
+      color: 0x1c222c,
+      roughness: 0.48,
+      metalness: 0.35,
+      emissive: 0xc8d2dc,
+      emissiveIntensity: 0.18,
+    });
+    this.marshalMats = [
+      new THREE.MeshStandardMaterial({
+        map: makeMarshalBoard("clear"),
+        roughness: 0.55,
+        metalness: 0.06,
+        side: THREE.DoubleSide,
+        emissive: 0x0a2014,
+        emissiveIntensity: 0.22,
+      }),
+      new THREE.MeshStandardMaterial({
+        map: makeMarshalBoard("hold"),
+        roughness: 0.55,
+        metalness: 0.06,
+        side: THREE.DoubleSide,
+        emissive: 0x201408,
+        emissiveIntensity: 0.22,
+      }),
+    ];
+    this.distMats = ["50", "100", "200"].map(
+      (label) =>
+        new THREE.MeshStandardMaterial({
+          map: makeDistanceBoard(label),
+          roughness: 0.52,
+          metalness: 0.05,
+          side: THREE.DoubleSide,
+        }),
+    );
+
+    for (let i = 0; i < 5; i++) {
       const lamp = new THREE.SpotLight(0xffe4bc, 10.5, 34, 0.55, 0.78, 1.45);
       this.streetLights.push(lamp);
       scene.add(lamp, lamp.target);
@@ -189,12 +300,22 @@ export class TrackWorld {
   update(playerZ: number, distance: number) {
     const zone = zoneAt(distance);
     this.fog.color.setHex(zone.fog);
-    this.scene.background = new THREE.Color(zone.fog);
+    this.fog.density = zone.fogDensity;
     this.skyMat.uniforms.horizon.value.setHex(zone.horizon);
     this.skyMat.uniforms.neon.value.setHex(zone.neon);
+    this.skyMat.uniforms.top.value.setHex(zone.top);
+    this.skyMat.uniforms.glow.value = zone.glow;
     this.zoneTint.set(zone.window);
-    this.towerMat.emissive.copy(this.zoneTint).multiplyScalar(0.22);
-    this.slabMat.emissive.copy(this.zoneTint).multiplyScalar(0.18);
+    this.towerMat.emissive.copy(this.zoneTint).multiplyScalar(zone.cityEmit);
+    this.slabMat.emissive.copy(this.zoneTint).multiplyScalar(zone.cityEmit * 0.82);
+    this.towerMat.emissiveIntensity = zone.cityBoost;
+    this.slabMat.emissiveIntensity = zone.cityBoost * 0.7;
+    this.horizonMat.emissive.copy(this.zoneTint).multiplyScalar(0.16);
+    this.horizonMat.emissiveIntensity = zone.cityBoost * 0.8;
+    this.lightTint.setHex(zone.lamp);
+    this.hemi.color.setHex(zone.horizon);
+    this.moon.color.setHex(zone.lamp).lerp(this.zoneTint, 0.18);
+    this.starMat.opacity = zone.star;
 
     const start = Math.floor((playerZ - ROAD.segmentLength) / ROAD.segmentLength);
     for (let i = 0; i < this.segments.length; i++) {
@@ -249,9 +370,10 @@ export class TrackWorld {
       depthWrite: false,
       fog: false,
       uniforms: {
-        top: { value: new THREE.Color(0x02050b) },
+        top: { value: new THREE.Color(ZONES[0].top) },
         horizon: { value: new THREE.Color(ZONES[0].horizon) },
         neon: { value: new THREE.Color(ZONES[0].neon) },
+        glow: { value: ZONES[0].glow },
       },
       vertexShader: `
         varying vec3 vPos;
@@ -265,10 +387,13 @@ export class TrackWorld {
         uniform vec3 top;
         uniform vec3 horizon;
         uniform vec3 neon;
+        uniform float glow;
         void main() {
-          float h = clamp(vPos.y / 180.0, -0.2, 1.0);
-          vec3 col = mix(horizon, top, smoothstep(0.0, 0.85, h));
-          col = mix(col, neon, 0.025 * (1.0 - smoothstep(0.0, 0.28, h)));
+          float h = clamp(vPos.y / 180.0, -0.22, 1.0);
+          float dome = 1.0 - smoothstep(-0.06, 0.36, h);
+          vec3 col = mix(horizon, top, smoothstep(0.0, 0.82, h));
+          col = mix(col, neon, glow * dome);
+          col += neon * (glow * 1.35) * dome * dome;
           gl_FragColor = vec4(col, 1.0);
         }
       `,
@@ -285,17 +410,15 @@ export class TrackWorld {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    return new THREE.Points(
-      geo,
-      new THREE.PointsMaterial({
-        color: 0xcfe8ff,
-        size: 0.22,
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false,
-        sizeAttenuation: true,
-      }),
-    );
+    this.starMat = new THREE.PointsMaterial({
+      color: 0xcfe8ff,
+      size: 0.22,
+      transparent: true,
+      opacity: ZONES[0].star,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+    return new THREE.Points(geo, this.starMat);
   }
 
   private makeCity() {
@@ -320,17 +443,14 @@ export class TrackWorld {
       new THREE.MeshStandardMaterial({ color: 0x1a222c, roughness: 0.45, metalness: 0.55 }),
       36,
     );
-    const horizon = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({
-        color: 0x0a121c,
-        roughness: 0.92,
-        metalness: 0.08,
-        emissive: new THREE.Color(0x152030),
-        emissiveIntensity: 0.22,
-      }),
-      48,
-    );
+    this.horizonMat = new THREE.MeshStandardMaterial({
+      color: 0x0a121c,
+      roughness: 0.92,
+      metalness: 0.08,
+      emissive: new THREE.Color(0x152030),
+      emissiveIntensity: 0.22,
+    });
+    const horizon = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), this.horizonMat, 48);
     this.cityLayers = [towers, crowns, slabs, sheds, antennas, horizon];
     for (const layer of this.cityLayers) {
       layer.frustumCulled = false;
@@ -484,12 +604,20 @@ export class TrackWorld {
         eye.position.set(side * (ROAD.halfWidth + 0.02), 0.085, z);
         g.add(eye);
       }
+
+      for (const z of [-14, 14]) {
+        const post = new THREE.Mesh(this.postGeo, this.eyeMat);
+        post.position.set(side * (ROAD.halfWidth + 1.55), 0.38, z);
+        g.add(post);
+      }
     }
 
     const flavor = index % 8;
     if (index === 1 || (flavor === 2 && index >= 1)) this.addGantry(g, index);
     if (flavor === 5 && index >= 1) this.addBillboard(g, index);
     if (flavor === 7 && index > 2) this.addTunnel(g);
+    if (flavor === 3 && index >= 1) this.addMarshal(g, index);
+    if (flavor === 4 && index >= 1) this.addDistanceMarker(g, index);
 
     return g;
   }
@@ -498,16 +626,18 @@ export class TrackWorld {
     const steel = new THREE.MeshStandardMaterial({ color: 0x151c26, metalness: 0.55, roughness: 0.38 });
     const beam = new THREE.Mesh(new THREE.BoxGeometry(ROAD.width + 6, 0.22, 0.5), steel);
     beam.position.set(0, 5.2, 0);
-    const labels = ["EXIT 12A", "HARBOR 2 km", "LANE 1-2", "PORT AUTH"];
+    const labels = ["HARBOR GP 2 km", "VOLTAGE CKT", "MIDNIGHT CUP", "LANES OPEN"];
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(4.2, 1.2),
       new THREE.MeshStandardMaterial({
-        map: makeGantrySign(labels[index % labels.length] ?? "EXIT 12A"),
+        map: makeGantrySign(labels[index % labels.length] ?? "HARBOR GP 2 km"),
         roughness: 0.62,
         metalness: 0.08,
+        side: THREE.DoubleSide,
       }),
     );
     sign.position.set(0, 4.55, 0.28);
+    sign.rotation.y = Math.PI;
     const left = new THREE.Mesh(new THREE.BoxGeometry(0.28, 5.2, 0.28), steel);
     left.position.set(-(ROAD.halfWidth + 2.6), 2.6, 0);
     const right = left.clone();
@@ -516,12 +646,27 @@ export class TrackWorld {
   }
 
   private addBillboard(g: THREE.Group, index: number) {
-    const titles = ["PORT AUTH.", "RIVER EXPWY", "NIGHT SHIFT", "CITY WORKS"];
-    const colors = ["#6a7a88", "#3a5468", "#4a5e52", "#6a6248"];
-    const tex = makeBillboardTexture(titles[index % titles.length], colors[index % colors.length]);
+    const titles = ["HARBOR GP", "VOLTAGE CIRCUIT", "MIDNIGHT CUP", "GRID LIGHT"];
+    const kickers = [
+      "STREET CIRCUIT  ·  NIGHT",
+      "MIDNIGHT VOLTAGE",
+      "ROUND 04  ·  HARBOR",
+      "VOLTAGE SERIES  ·  LIVE",
+    ];
+    const colors = ["#2a6a88", "#7a2458", "#6a5a28", "#3a5468"];
+    const tex = makeBillboardTexture(
+      titles[index % titles.length],
+      colors[index % colors.length],
+      kickers[index % kickers.length],
+    );
     const board = new THREE.Mesh(
       new THREE.PlaneGeometry(10, 5),
-      new THREE.MeshStandardMaterial({ map: tex, emissive: 0x101418, emissiveIntensity: 0.16 }),
+      new THREE.MeshStandardMaterial({
+        map: tex,
+        emissive: 0x101418,
+        emissiveIntensity: 0.22,
+        side: THREE.DoubleSide,
+      }),
     );
     const side = index % 2 === 0 ? -1 : 1;
     board.position.set(side * (ROAD.halfWidth + 8.5), 6.2, 0);
@@ -548,5 +693,25 @@ export class TrackWorld {
       g.add(wall);
     }
     g.add(roof, strip);
+  }
+
+  private addMarshal(g: THREE.Group, index: number) {
+    const side = index % 2 === 0 ? -1 : 1;
+    const post = new THREE.Mesh(this.signPostGeo, this.postMat);
+    post.position.set(side * (ROAD.halfWidth + 2.15), 0.6, 8);
+    const board = new THREE.Mesh(this.marshalGeo, this.marshalMats[index % 2]);
+    board.position.set(side * (ROAD.halfWidth + 2.15), 1.28, 8.04);
+    board.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+    g.add(post, board);
+  }
+
+  private addDistanceMarker(g: THREE.Group, index: number) {
+    const side = index % 2 === 0 ? 1 : -1;
+    const post = new THREE.Mesh(this.signPostGeo, this.postMat);
+    post.position.set(side * (ROAD.halfWidth + 1.85), 0.6, -6);
+    const board = new THREE.Mesh(this.distGeo, this.distMats[index % this.distMats.length]);
+    board.position.set(side * (ROAD.halfWidth + 1.85), 1.32, -6);
+    board.rotation.y = Math.PI;
+    g.add(post, board);
   }
 }

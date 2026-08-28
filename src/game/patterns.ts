@@ -117,6 +117,36 @@ export const PATTERNS: Pattern[] = [
     ],
   },
   {
+    name: "split-pack",
+    minDistance: 950,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
+      { lane: 3, zOffset: 5, speedOffset: 3, kind: "support" },
+      { lane: 1, zOffset: 26, speedOffset: -6, kind: "gt" },
+      { lane: 3, zOffset: 38, speedOffset: 4, kind: "safety" },
+    ],
+  },
+  {
+    name: "mid-sweep",
+    minDistance: 1400,
+    cars: [
+      { lane: 3, zOffset: 0, speedOffset: 2, kind: "gt" },
+      { lane: 2, zOffset: 16, speedOffset: -5, kind: "support" },
+      { lane: 0, zOffset: 22, speedOffset: 4, kind: "gt" },
+      { lane: 3, zOffset: 40, speedOffset: -3, kind: "safety", weave: 0.7 },
+    ],
+  },
+  {
+    name: "late-zipper",
+    minDistance: 1900,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
+      { lane: 1, zOffset: 14, speedOffset: -8, kind: "support" },
+      { lane: 2, zOffset: 28, speedOffset: 6, kind: "gt" },
+      { lane: 0, zOffset: 44, speedOffset: -4, kind: "gt", weave: 0.75 },
+    ],
+  },
+  {
     name: "double-stagger",
     minDistance: 2400,
     cars: [
@@ -124,6 +154,27 @@ export const PATTERNS: Pattern[] = [
       { lane: 2, zOffset: 12, speedOffset: -8, kind: "support" },
       { lane: 1, zOffset: 28, speedOffset: 10, kind: "gt" },
       { lane: 3, zOffset: 40, speedOffset: -4, kind: "safety", weave: 0.9 },
+    ],
+  },
+  {
+    name: "hook-left",
+    minDistance: 2600,
+    cars: [
+      { lane: 1, zOffset: 0, speedOffset: 2, kind: "gt" },
+      { lane: 2, zOffset: 3, speedOffset: 0, kind: "support" },
+      { lane: 3, zOffset: 8, speedOffset: -2, kind: "gt" },
+      { lane: 0, zOffset: 34, speedOffset: 8, kind: "safety", weave: 0.85 },
+    ],
+  },
+  {
+    name: "apex-gate",
+    minDistance: 3400,
+    cars: [
+      { lane: 0, zOffset: 0, speedOffset: -3, kind: "gt" },
+      { lane: 1, zOffset: 6, speedOffset: 2, kind: "support" },
+      { lane: 3, zOffset: 4, speedOffset: 1, kind: "gt" },
+      { lane: 2, zOffset: 26, speedOffset: -8, kind: "safety", weave: 0.8 },
+      { lane: 0, zOffset: 42, speedOffset: 6, kind: "gt" },
     ],
   },
 ];
