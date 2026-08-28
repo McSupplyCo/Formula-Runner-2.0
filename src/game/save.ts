@@ -2,6 +2,7 @@ import {
   creditPayout,
   emptyCarGarage,
   emptyGarage,
+  LIVERIES,
   stockLiveries,
   type CarGarage,
   type PartId,
@@ -169,6 +170,10 @@ export function checksumMatches(raw: unknown): boolean {
   return migrateSave(data).checksum === data.checksum;
 }
 
+export function hasStoredSave(): boolean {
+  return readSlot(SAVE_KEY) !== null || readSlot(SAVE_BACKUP_KEY) !== null;
+}
+
 export function loadSave(): SaveData {
   const primary = readSlot(SAVE_KEY);
   const backup = readSlot(SAVE_BACKUP_KEY);
@@ -215,15 +220,17 @@ function parseGarage(value: unknown, version: number): Record<CarId, CarGarage> 
     // v3 and v4 both have `aero`. Prefer new keys when present; otherwise version
     // decides whether leftover `aero` is tires (v3) or aero (v4).
     const v4 = hasV4 || (!hasV3 && version >= 4);
+    const livery = typeof item.livery === "string" ? item.livery : stock.livery;
+    const preset = LIVERIES.find((row) => row.id === livery);
     next[car.id] = {
       engine: rank(v4 ? item.engine : item.power),
       tires: rank(v4 ? item.tires : item.aero),
       turbo: rank(v4 ? item.turbo : item.ers),
       aero: rank(v4 ? item.aero : item.chassis),
-      livery: typeof item.livery === "string" ? item.livery : stock.livery,
-      primary: color(item.primary, stock.primary),
-      secondary: color(item.secondary, stock.secondary),
-      accent: color(item.accent, stock.accent),
+      livery,
+      primary: color(item.primary, preset?.color ?? stock.primary),
+      secondary: color(item.secondary, preset?.secondary ?? stock.secondary),
+      accent: color(item.accent, preset?.accent ?? stock.accent),
     };
   }
   return next;

@@ -198,7 +198,8 @@
    * ------------------------------------------------------------------ */
 
   var canvas = document.getElementById("circuit-canvas");
-  var scene = canvas ? circuit(canvas) : null;
+  if (reduced && canvas) canvas.style.display = "none";
+  var scene = !reduced && canvas ? circuit(canvas) : null;
   if (!scene && canvas) canvas.style.display = "none";
 
   var hero = document.querySelector(".hero");

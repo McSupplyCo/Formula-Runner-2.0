@@ -24,6 +24,17 @@ describe("save v4 migration", () => {
     expect(next.ownedCars).toContain("drift");
   });
 
+  it("keeps paid v3 livery paint when custom color fields are missing", () => {
+    const next = migrateSave({
+      version: 3,
+      garage: { apex: { power: 1, chassis: 0, aero: 0, ers: 0, livery: "apex-harbor" } },
+    });
+    expect(next.garage.apex.livery).toBe("apex-harbor");
+    expect(next.garage.apex.primary).toBe(0x1a6a7a);
+    expect(next.garage.apex.secondary).toBe(0x0e2430);
+    expect(next.garage.apex.accent).toBe(0xc4a035);
+  });
+
   it("keeps v4 ranks when engine/tires keys are already present", () => {
     const next = migrateSave({
       version: 4,

@@ -8,6 +8,7 @@ export class GameAudio {
   private sfx: GainNode | null = null;
   private music: GainNode | null = null;
   private engine: OscillatorNode | null = null;
+  private engineHarmonic: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
   private wind: NoiseNode | null = null;
@@ -34,14 +35,21 @@ export class GameAudio {
     const osc = ctx.createOscillator();
     osc.type = "sawtooth";
     osc.frequency.value = 72;
+    const harmonic = ctx.createOscillator();
+    harmonic.type = "triangle";
+    harmonic.frequency.value = 144;
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
     filter.frequency.value = 420;
     const gain = ctx.createGain();
     gain.gain.value = 0.0001;
-    osc.connect(filter).connect(gain).connect(this.sfx!);
+    osc.connect(filter);
+    harmonic.connect(filter);
+    filter.connect(gain).connect(this.sfx!);
     osc.start();
+    harmonic.start();
     this.engine = osc;
+    this.engineHarmonic = harmonic;
     this.engineGain = gain;
     this.engineFilter = filter;
     this.wind = this.makeNoise(0.0001);
@@ -53,6 +61,9 @@ export class GameAudio {
     this.engine?.stop();
     this.engine?.disconnect();
     this.engine = null;
+    this.engineHarmonic?.stop();
+    this.engineHarmonic?.disconnect();
+    this.engineHarmonic = null;
     this.engineGain = null;
     this.engineFilter = null;
     this.wind?.source.stop();
@@ -69,7 +80,9 @@ export class GameAudio {
   update(speedKph: number, boosting: boolean) {
     if (!this.running || !this.ctx || !this.engine || !this.engineGain || !this.engineFilter) return;
     const t = Math.min(1.2, speedKph / 260);
-    this.engine.frequency.setTargetAtTime(70 + t * 168 + (boosting ? 28 : 0), this.ctx.currentTime, 0.08);
+    const hz = 70 + t * 168 + (boosting ? 28 : 0);
+    this.engine.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.08);
+    this.engineHarmonic?.frequency.setTargetAtTime(hz * 2, this.ctx.currentTime, 0.08);
     this.engineFilter.frequency.setTargetAtTime(380 + t * 1400, this.ctx.currentTime, 0.1);
     this.engineGain.gain.setTargetAtTime(0.03 + t * 0.07, this.ctx.currentTime, 0.08);
     if (this.wind) this.wind.gain.gain.setTargetAtTime(0.01 + t * 0.05, this.ctx.currentTime, 0.12);
@@ -143,16 +156,16 @@ export class GameAudio {
 
   private startMusic() {
     if (!this.ctx || !this.music) return;
-    const notes = [82.4, 123.5, 164.8];
+    const notes = [82.4, 123.5, 164.8, 246.9];
     notes.forEach((freq, i) => {
       const osc = this.ctx!.createOscillator();
       osc.type = i === 0 ? "sine" : "triangle";
       osc.frequency.value = freq;
       const gain = this.ctx!.createGain();
-      gain.gain.value = i === 0 ? 0.035 : 0.012;
+      gain.gain.value = i === 0 ? 0.038 : i === 3 ? 0.008 : 0.012;
       const filter = this.ctx!.createBiquadFilter();
       filter.type = "lowpass";
-      filter.frequency.value = 420;
+      filter.frequency.value = 520;
       osc.connect(filter).connect(gain).connect(this.music!);
       osc.start();
       this.musicOsc.push(osc);

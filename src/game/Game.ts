@@ -9,7 +9,7 @@ import { InputController } from "./input";
 import { clamp, damp, formatDistance, formatScore, headingOffset, laneCenter } from "./math";
 import { lanesBlockedNear, materializePattern, pickFairPattern, type TrafficCar } from "./patterns";
 import { applyDoubleReward, canDoubleReward, shouldShowInterstitial, type RewardGrant } from "./ads";
-import { commitRun, loadSave, writeSave, type SaveData } from "./save";
+import { commitRun, hasStoredSave, loadSave, writeSave, type SaveData } from "./save";
 import {
   buyCar,
   buyLivery,
@@ -39,7 +39,7 @@ import {
   tickCombo,
 } from "./scoring";
 import { emptyRun, type GameMode, type RunStats } from "./state";
-import { ADS, BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD, SAVE_BACKUP_KEY, SAVE_KEY, SPAWN, type CarId } from "./tuning";
+import { ADS, BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD, SPAWN, type CarId } from "./tuning";
 import { createFormulaCar, createTrafficCar, disposeCar } from "./vehicles";
 import { TrackWorld, zoneAt } from "./world";
 import { makeNightEnv } from "./env";
@@ -76,6 +76,7 @@ export class Game {
   private railReturn: "title" | "garage" | "results" = "title";
   private buying = false;
   private adTimer: number | null = null;
+  private adReturnFocus: HTMLElement | null = null;
   private paintTimer: number | null = null;
   private pendingBreak = false;
 
@@ -146,11 +147,7 @@ export class Game {
 
     this.input.attach(canvas);
     this.bindUi();
-    if (
-      matchMedia("(prefers-reduced-motion: reduce)").matches &&
-      !localStorage.getItem(SAVE_KEY) &&
-      !localStorage.getItem(SAVE_BACKUP_KEY)
-    ) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches && !hasStoredSave()) {
       this.save.reducedMotion = true;
       (this.ui.motion as HTMLInputElement).checked = true;
     }
@@ -212,14 +209,16 @@ export class Game {
   };
 
   private quality = 1;
+  private qualityHold = 0;
 
   private adaptQuality() {
+    if (this.qualityHold > 0) this.qualityHold -= 1;
     if (this.fps < 26 && this.quality > 0) {
       this.quality = 0;
+      this.qualityHold = 20;
       this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.1));
-      this.composer = null;
-      this.bloomPass = null;
-    } else if (this.fps > 54 && this.quality === 0) {
+      this.disposeBloom();
+    } else if (this.qualityHold === 0 && this.fps > 54 && this.quality === 0) {
       this.quality = 1;
       this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
       if (!this.composer) this.setupBloom();
@@ -502,7 +501,10 @@ export class Game {
   private setPause(paused: boolean) {
     this.mode = paused ? "paused" : "playing";
     this.setVisible("pause", paused);
-    if (paused) this.audio.update(0, false);
+    if (paused) {
+      this.audio.update(0, false);
+      this.ui.resume.focus();
+    }
   }
 
   private sync(dt: number) {
@@ -641,6 +643,7 @@ export class Game {
   }
 
   private setupBloom() {
+    this.disposeBloom();
     try {
       const composer = new EffectComposer(this.renderer);
       composer.addPass(new RenderPass(this.scene, this.camera));
@@ -655,9 +658,15 @@ export class Game {
       this.composer = composer;
       this.bloomPass = bloom;
     } catch {
-      this.composer = null;
-      this.bloomPass = null;
+      this.disposeBloom();
     }
+  }
+
+  private disposeBloom() {
+    this.composer?.dispose();
+    this.bloomPass?.dispose();
+    this.composer = null;
+    this.bloomPass = null;
   }
 
   private acquire(kind: TrafficCar["kind"]) {
@@ -1205,8 +1214,7 @@ export class Game {
     const status = this.ui.adStatus;
     const bar = this.ui.adBar;
     overlay.classList.remove("hidden");
-    this.ui.play.toggleAttribute("disabled", true);
-    this.ui.again.toggleAttribute("disabled", true);
+    this.setAdChrome(true);
     if (status) status.textContent = kind === "rewarded" ? "Rewarded placement…" : "Break placement…";
     if (bar) {
       bar.style.animation = "none";
@@ -1217,10 +1225,24 @@ export class Game {
     this.adTimer = window.setTimeout(() => {
       this.adTimer = null;
       overlay.classList.add("hidden");
-      this.ui.play.removeAttribute("disabled");
-      this.ui.again.removeAttribute("disabled");
+      this.setAdChrome(false);
       onDone();
     }, ms);
+  }
+
+  private setAdChrome(active: boolean) {
+    this.ui.shell.toggleAttribute("inert", active);
+    this.ui.stage.toggleAttribute("inert", active);
+    this.ui.shell.setAttribute("aria-hidden", String(active));
+    this.ui.stage.setAttribute("aria-hidden", String(active));
+    if (active) {
+      this.adReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this.ui.interstitial.tabIndex = -1;
+      this.ui.interstitial.focus();
+    } else {
+      this.adReturnFocus?.focus();
+      this.adReturnFocus = null;
+    }
   }
 
   private burstCrash() {
