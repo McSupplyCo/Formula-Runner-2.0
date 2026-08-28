@@ -3,11 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#070b12" />
+    <meta name="description" content="Formula Runner — original night-circuit arcade racer. Floor it. Don't stop." />
     <title>Formula Runner</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -18,7 +20,7 @@
             <span>Midnight Voltage</span>
             <strong>Formula Runner</strong>
           </header>
-          <nav class="nav">
+          <nav class="nav" aria-label="Main">
             <button id="navHome" class="nav-btn is-active" type="button">Home</button>
             <button id="openGarage" class="nav-btn" type="button">Garage</button>
             <button id="openSettings" class="nav-btn" type="button">Settings</button>
@@ -32,11 +34,12 @@
 
         <div class="rail-body">
         <section id="title" class="panel">
-          <p class="kicker">Select car</p>
+          <p class="kicker">Grid</p>
+          <p class="lede">Pick a car. Race. Thread traffic. Cash the near miss.</p>
           <div id="cars" class="cars"></div>
           <div class="panel-foot">
             <button id="play" class="primary" type="button">Race</button>
-            <p class="help">A/D or arrows to steer · S brake · Space boost · Esc pause</p>
+            <p class="help">A/D or arrows steer · S brake · Space boost · Esc pause · drag to steer on a phone</p>
           </div>
         </section>
 
@@ -45,31 +48,40 @@
             <div>
               <p class="kicker">Garage</p>
               <h2>Setup</h2>
-              <p id="garageLadder" class="ladder">252 upgrades · 21 ranks per part</p>
+              <p id="garageLadder" class="ladder">144 upgrades · 12 ranks per part</p>
             </div>
             <p id="garageCredits" class="wallet">0 cr</p>
           </header>
           <p class="section-label">Cars</p>
           <div id="garageCars" class="cars"></div>
+          <div id="garageSpecs" class="spec-grid" aria-live="polite"></div>
           <p class="section-label">Parts</p>
           <div id="garageParts" class="parts"></div>
           <p class="section-label">Livery</p>
           <div id="garageLiveries" class="liveries"></div>
-          <p id="garageHint" class="hint">Each buy is a small step. Full spec is 84 ranks on this car, 252 across the grid.</p>
+          <div id="garagePaint" class="paint">
+            <label>Primary <input id="paintPrimary" type="color" value="#00e5ff" /></label>
+            <label>Secondary <input id="paintSecondary" type="color" value="#0a1628" /></label>
+            <label>Accent <input id="paintAccent" type="color" value="#ff006e" /></label>
+            <p class="help">Tires stay rubber. Color is bodywork only.</p>
+          </div>
+          <p id="garageHint" class="hint">Early ranks are cheap. Full trees take many runs — not one lucky night.</p>
           <button id="closeGarage" class="ghost" type="button">Back to home</button>
         </section>
 
         <section id="results" class="panel hidden">
           <p class="kicker" id="resultBest">Run complete</p>
           <h2 id="resultScore">0</h2>
+          <p id="resultCredits" class="wallet credit-pop">+0 cr</p>
           <dl class="metrics">
             <div><dt>Distance</dt><dd id="resultDistance">0 m</dd></div>
             <div><dt>Near misses</dt><dd id="resultNear">0</dd></div>
             <div><dt>Overtakes</dt><dd id="resultPass">0</dd></div>
             <div><dt>Max combo</dt><dd id="resultCombo">×0</dd></div>
           </dl>
-          <p id="resultCredits" class="wallet">+0 cr</p>
+          <p id="resultAdNote" class="help">Watch a short placement to double this payout. Once per run.</p>
           <button id="again" class="primary" type="button">Race again</button>
+          <button id="resultDouble" class="ghost" type="button">Double credits</button>
           <button id="openGarageResults" class="ghost" type="button">Open garage</button>
           <button id="menu" class="text-btn" type="button">Home</button>
         </section>
@@ -79,6 +91,13 @@
           <h2>Settings</h2>
           <label class="setting"><span>Sound</span><input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
           <label class="setting"><span>Music</span><input id="music" type="range" min="0" max="1" step="0.01" /></label>
+          <label class="setting">
+            <span>Speedometer</span>
+            <select id="hudSpeed">
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
           <label class="setting check"><span>Reduced motion</span><input id="motion" type="checkbox" /></label>
           <label class="setting check"><span>Haptics</span><input id="haptics" type="checkbox" /></label>
           <button id="closeSettings" class="ghost" type="button">Done</button>
@@ -93,7 +112,7 @@
         </div>
         <div id="viewport" class="viewport">
         <canvas id="view"></canvas>
-        <section id="hud" class="hud hidden">
+        <section id="hud" class="hud hidden" data-speed="left">
           <div class="hud-left cluster">
             <div class="speed"><span id="speed">0</span><small>KPH</small></div>
             <div class="gear-row"><span>Gear</span><b id="gear">N</b></div>
@@ -123,6 +142,14 @@
         </div>
         </div>
       </main>
+      <div id="interstitial" class="ad-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adStatus">
+        <div class="ad-card">
+          <p class="kicker">Voltage Circuit</p>
+          <h2>Break</h2>
+          <p id="adStatus">Loading placement…</p>
+          <div class="ad-bar" aria-hidden="true"><span id="adBar"></span></div>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

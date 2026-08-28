@@ -7,6 +7,7 @@ export type GameMode =
   | "results";
 
 export type RunStats = {
+  id: string;
   score: number;
   distance: number;
   speed: number;
@@ -17,9 +18,15 @@ export type RunStats = {
   boost: number;
   boosting: boolean;
   maxCombo: number;
+  settled: boolean;
 };
 
+export function newRunId(): string {
+  return `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+}
+
 export const emptyRun = (): RunStats => ({
+  id: newRunId(),
   score: 0,
   distance: 0,
   speed: 0,
@@ -30,6 +37,7 @@ export const emptyRun = (): RunStats => ({
   boost: 0,
   boosting: false,
   maxCombo: 0,
+  settled: false,
 });
 
 const PLAYING: GameMode[] = ["countdown", "playing"];

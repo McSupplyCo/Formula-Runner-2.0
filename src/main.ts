@@ -60,7 +60,18 @@ const ids = [
   "garageLiveries",
   "garageHint",
   "garageLadder",
+  "garageSpecs",
+  "garagePaint",
+  "paintPrimary",
+  "paintSecondary",
+  "paintAccent",
   "resultCredits",
+  "resultDouble",
+  "resultAdNote",
+  "interstitial",
+  "adStatus",
+  "adBar",
+  "hudSpeed",
 ] as const;
 
 const ui = Object.fromEntries(
@@ -72,4 +83,6 @@ const ui = Object.fromEntries(
 ) as Record<string, HTMLElement>;
 
 const game = new Game(canvas, ui);
-Object.assign(window, { game });
+if (import.meta.env.DEV || new URLSearchParams(location.search).has("debug")) {
+  Object.assign(window, { game });
+}

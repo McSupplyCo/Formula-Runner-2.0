@@ -150,14 +150,36 @@ export const BLOOM = {
 } as const;
 
 export const CREDIT = {
-  base: 80,
-  perMeter: 0.15,
-  nearMiss: 25,
-  overtake: 15,
-  personalBest: 100,
+  base: 42,
+  perMeter: 0.07,
+  nearMiss: 10,
+  overtake: 6,
+  combo: 5,
+  personalBest: 45,
+  /** Hard cap so hacked distance / stacked bonuses cannot mint a full tree. */
+  maxPayout: 900,
 } as const;
 
-export const MAX_PART_RANK = 21;
+export const UPGRADE = {
+  rankBase: 70,
+  rankGrowth: 1.17,
+  engineAccel: 22,
+  tiresSteer: 8,
+  tiresGrip: 5.5,
+  turboDrain: 0.14,
+  turboCharge: 0.18,
+  aeroTopSpeed: 28,
+  aeroSteerHold: 0.4,
+} as const;
 
-export const SAVE_VERSION = 3;
+export const ADS = {
+  interstitialEvery: 6,
+  rewardedMs: 1400,
+  interstitialMs: 1600,
+} as const;
+
+export const MAX_PART_RANK = 12;
+
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = "formula-runner-2";
+export const SAVE_BACKUP_KEY = "formula-runner-2-bak";

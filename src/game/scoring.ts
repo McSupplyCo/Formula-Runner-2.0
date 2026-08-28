@@ -47,12 +47,12 @@ export type Difficulty = {
 };
 
 export function difficultyAt(distance: number): Difficulty {
-  const t = clamp(distance / 4500, 0, 1);
+  const t = clamp(distance / 5200, 0, 1);
   return {
-    spawnInterval: lerpRange(1.08, 0.64, t),
-    trafficSpeed: lerpRange(96, 205, t),
+    spawnInterval: lerpRange(1.14, 0.68, t),
+    trafficSpeed: lerpRange(92, 198, t),
     patternBias: t,
-    moverChance: lerpRange(0.12, 0.55, t),
+    moverChance: lerpRange(0.1, 0.48, t),
   };
 }
 

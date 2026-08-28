@@ -112,6 +112,16 @@ export class GameAudio {
     this.blip(990, 0.14, "triangle", 0.05);
   }
 
+  playCoin() {
+    this.blip(880, 0.07, "sine", 0.05);
+    this.blip(1180, 0.1, "triangle", 0.04);
+  }
+
+  playUpgrade() {
+    this.blip(420, 0.08, "square", 0.05);
+    this.blip(640, 0.1, "triangle", 0.05);
+  }
+
   private ensure() {
     if (!this.ctx) {
       const ctx = new AudioContext();
