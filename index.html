@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -18,88 +18,93 @@
       <aside id="shell" class="rail">
         <div class="rail-head">
           <header class="brand">
-            <span>Midnight Voltage</span>
+            <span>Voltage Circuit</span>
             <strong>Formula Runner</strong>
           </header>
           <nav class="nav" aria-label="Main">
-            <button id="navHome" class="nav-btn is-active" type="button">Home</button>
-            <button id="openGarage" class="nav-btn" type="button">Garage</button>
-            <button id="openSettings" class="nav-btn" type="button">Settings</button>
+            <button id="navHome" class="nav-btn is-active" type="button">Grid</button>
+            <button id="openGarage" class="nav-btn" type="button">Pit</button>
+            <button id="openSettings" class="nav-btn" type="button">Box</button>
           </nav>
           <dl class="shell-stats">
-            <div><dt>Best</dt><dd id="statScore">0</dd></div>
-            <div><dt>Distance</dt><dd id="statDistance">0 m</dd></div>
-            <div><dt>Credits</dt><dd id="statCredits">0 cr</dd></div>
+            <div><dt>PB</dt><dd id="statScore">0</dd></div>
+            <div><dt>Dist</dt><dd id="statDistance">0 m</dd></div>
+            <div><dt>Credits</dt><dd id="statCredits">0 CR</dd></div>
           </dl>
         </div>
 
         <div class="rail-body">
         <section id="title" class="panel">
-          <p class="kicker">Grid</p>
-          <p class="lede">Pick a car. Race. Thread traffic. Cash the near miss.</p>
+          <p class="kicker">Lights out</p>
+          <p class="lede">Pick a car. Thread the night. Cash the near miss.</p>
           <div id="cars" class="cars"></div>
           <div class="panel-foot">
-            <button id="play" class="primary" type="button">Race</button>
-            <p class="help">A/D or arrows steer · S brake · Space boost · Esc pause · drag to steer on a phone</p>
+            <button id="play" class="primary" type="button">Lights out</button>
+            <p class="help controls">
+              <span><kbd>A</kbd><kbd>D</kbd> steer</span>
+              <span><kbd>S</kbd> brake</span>
+              <span><kbd>Space</kbd> boost</span>
+              <span><kbd>Esc</kbd> hold</span>
+            </p>
           </div>
         </section>
 
         <section id="garage" class="panel hidden">
           <header class="panel-head">
             <div>
-              <p class="kicker">Garage</p>
-              <h2>Setup</h2>
-              <p id="garageLadder" class="ladder">144 upgrades · 12 ranks per part</p>
+              <p class="kicker">Pit</p>
+              <h2>Spec</h2>
+              <p id="garageLadder" class="ladder">Race to earn credits</p>
             </div>
-            <p id="garageCredits" class="wallet">0 cr</p>
+            <p id="garageCredits" class="wallet">0 CR</p>
           </header>
-          <p class="section-label">Cars</p>
+          <p class="section-label">Chassis</p>
           <div id="garageCars" class="cars"></div>
           <div id="garageSpecs" class="spec-grid" aria-live="polite"></div>
           <p class="section-label">Parts</p>
           <div id="garageParts" class="parts"></div>
-          <p class="section-label">Livery</p>
+          <p class="section-label">Paint</p>
           <div id="garageLiveries" class="liveries"></div>
           <div id="garagePaint" class="paint">
-            <label>Primary <input id="paintPrimary" type="color" value="#00e5ff" /></label>
-            <label>Secondary <input id="paintSecondary" type="color" value="#0a1628" /></label>
-            <label>Accent <input id="paintAccent" type="color" value="#ff006e" /></label>
-            <p class="help">Tires stay rubber. Color is bodywork only.</p>
+            <label>Body <input id="paintPrimary" type="color" value="#00e5ff" /></label>
+            <label>Shade <input id="paintSecondary" type="color" value="#0a1628" /></label>
+            <label>Stripe <input id="paintAccent" type="color" value="#ff006e" /></label>
+            <p class="help">Tires stay rubber.</p>
           </div>
-          <p id="garageHint" class="hint">Early ranks are cheap. Full trees take many runs — not one lucky night.</p>
-          <button id="closeGarage" class="ghost" type="button">Back to home</button>
+          <p id="garageHint" class="hint">Race nights pay for spec.</p>
+          <button id="closeGarage" class="ghost" type="button">Back to grid</button>
         </section>
 
         <section id="results" class="panel hidden">
-          <p class="kicker" id="resultBest">Run complete</p>
+          <p class="kicker" id="resultBest">Chequered</p>
           <h2 id="resultScore">0</h2>
-          <p id="resultCredits" class="wallet credit-pop">+0 cr</p>
+          <p id="resultCredits" class="wallet credit-pop">+0 CR</p>
           <dl class="metrics">
             <div><dt>Distance</dt><dd id="resultDistance">0 m</dd></div>
             <div><dt>Near misses</dt><dd id="resultNear">0</dd></div>
             <div><dt>Overtakes</dt><dd id="resultPass">0</dd></div>
             <div><dt>Max combo</dt><dd id="resultCombo">×0</dd></div>
           </dl>
-          <p id="resultAdNote" class="help">Watch a short placement to double this payout. Once per run.</p>
+          <p id="resultAdNote" class="help">Double this payout once. Optional.</p>
           <button id="again" class="primary" type="button">Race again</button>
           <button id="resultDouble" class="ghost" type="button">Double credits</button>
-          <button id="openGarageResults" class="ghost" type="button">Open garage</button>
-          <button id="menu" class="text-btn" type="button">Home</button>
+          <button id="openGarageResults" class="ghost" type="button">Open pit</button>
+          <button id="menu" class="text-btn" type="button">Grid</button>
         </section>
 
         <section id="settings" class="panel hidden">
-          <p class="kicker">Preferences</p>
-          <h2>Settings</h2>
-          <label class="setting"><span>Sound</span><input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
-          <label class="setting"><span>Music</span><input id="music" type="range" min="0" max="1" step="0.01" /></label>
-          <label class="setting">
-            <span>Speedometer</span>
-            <select id="hudSpeed">
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-            </select>
-          </label>
-          <label class="setting check"><span>Reduced motion</span><input id="motion" type="checkbox" /></label>
+          <p class="kicker">Box</p>
+          <h2>Radio</h2>
+          <label class="setting"><span>Engine</span><input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
+          <label class="setting"><span>Bed</span><input id="music" type="range" min="0" max="1" step="0.01" /></label>
+          <div class="setting">
+            <span>Speedo</span>
+            <div id="hudSpeed" class="seg" role="group" aria-label="Speedo side">
+              <button type="button" data-side="left">Left</button>
+              <button type="button" data-side="right">Right</button>
+            </div>
+          </div>
+          <label class="setting check"><span>Calm motion</span><input id="motion" type="checkbox" /></label>
           <label class="setting check"><span>Haptics</span><input id="haptics" type="checkbox" /></label>
           <button id="closeSettings" class="ghost" type="button">Done</button>
         </section>
@@ -109,7 +114,7 @@
       <main id="stage" class="stage">
         <div class="stage-chrome">
           <span id="stageLabel">Harbor Lights</span>
-          <span id="stageMode">Preview</span>
+          <span id="stageMode">Grid</span>
         </div>
         <div id="viewport" class="viewport">
         <canvas id="view"></canvas>
@@ -123,7 +128,7 @@
             <div id="score">0</div>
             <div id="distance">0 m</div>
             <div id="zone">Harbor Lights</div>
-            <button id="pauseHud" class="text-btn hud-pause" type="button">Pause</button>
+            <button id="pauseHud" class="text-btn hud-pause" type="button">Hold</button>
           </div>
           <div id="combo" class="combo" aria-live="polite"></div>
           <div id="toast" class="toast" aria-live="assertive"></div>
@@ -131,10 +136,10 @@
         <div id="countdown" class="countdown hidden">3</div>
         <section id="pause" class="stage-modal hidden">
           <div class="modal">
-            <p class="kicker">Paused</p>
-            <h2>Take a breath</h2>
-            <button id="resume" class="primary" type="button">Resume</button>
-            <button id="quit" class="ghost" type="button">Quit to home</button>
+            <p class="kicker">Held</p>
+            <h2>Yellow flag</h2>
+            <button id="resume" class="primary" type="button">Green</button>
+            <button id="quit" class="ghost" type="button">Back to grid</button>
           </div>
         </section>
         <div id="touch" class="touch hidden">
@@ -146,8 +151,8 @@
       <div id="interstitial" class="ad-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adStatus">
         <div class="ad-card">
           <p class="kicker">Voltage Circuit</p>
-          <h2>Break</h2>
-          <p id="adStatus">Loading placement…</p>
+          <h2>Hold</h2>
+          <p id="adStatus">Stand by…</p>
           <div class="ad-bar" aria-hidden="true"><span id="adBar"></span></div>
         </div>
       </div>

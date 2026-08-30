@@ -1,5 +1,5 @@
 import { ADS } from "./tuning";
-import type { GarageState } from "./garage";
+import { formatCredits, type GarageState } from "./garage";
 
 export type RewardGrant = {
   runId: string;
@@ -23,7 +23,7 @@ export function applyDoubleReward<T extends GarageState>(
     save: { ...save, credits: Math.floor(save.credits) + bonus },
     grant: { ...grant, doubled: true },
     ok: true,
-    hint: `Credits doubled · +${bonus} cr`,
+    hint: `Credits doubled · +${formatCredits(bonus)}`,
   };
 }
 
