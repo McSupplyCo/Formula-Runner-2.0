@@ -214,7 +214,7 @@ export function buyPart<T extends GarageState>(save: T, carId: CarId, part: Part
   if (locked) return { save, ok: false, hint: locked };
   const cost = rankCost(next);
   const credits = Math.floor(save.credits);
-  if (credits < cost) return { save, ok: false, hint: `Need ${cost} cr.` };
+  if (credits < cost) return { save, ok: false, hint: `Need ${formatCredits(cost)}.` };
   row[part] = next;
   const name = PARTS.find((item) => item.id === part)?.name ?? part;
   return {
@@ -224,19 +224,19 @@ export function buyPart<T extends GarageState>(save: T, carId: CarId, part: Part
       garage: { ...save.garage, [carId]: row },
     },
     ok: true,
-    hint: `${name} · Rank ${next} / ${MAX_PART_RANK} · ${partDelta(part, next - 1, next)}`,
+    hint: `${name} fitted · ${partDelta(part, next - 1, next)}`,
   };
 }
 
 export function buyCar<T extends GarageState>(save: T, carId: CarId): BuyResult<T> {
   const def = CARS.find((car) => car.id === carId);
   if (!def) return { save, ok: false, hint: "Unknown car." };
-  if (ownsCar(save, carId)) return { save, ok: false, hint: "Already in the garage." };
+  if (ownsCar(save, carId)) return { save, ok: false, hint: "Already on the grid." };
   if (save.bestDistance < def.unlockBest) {
     return { save, ok: false, hint: `Unlock at ${def.unlockBest.toLocaleString("en-US")} m.` };
   }
   const credits = Math.floor(save.credits);
-  if (credits < def.unlockCost) return { save, ok: false, hint: `Need ${def.unlockCost} cr.` };
+  if (credits < def.unlockCost) return { save, ok: false, hint: `Need ${formatCredits(def.unlockCost)}.` };
   return {
     save: {
       ...save,
@@ -245,7 +245,7 @@ export function buyCar<T extends GarageState>(save: T, carId: CarId): BuyResult<
       selectedCar: carId,
     },
     ok: true,
-    hint: `${def.name} is yours. Stock trim — upgrade it.`,
+    hint: `${def.name} is yours. Stock trim — spec it.`,
   };
 }
 
@@ -257,7 +257,7 @@ export function buyLivery<T extends GarageState>(save: T, liveryId: string): Buy
     return { save: paintCar(save, livery.car, livery.color, livery.secondary, livery.accent, livery.id), ok: true, hint: `${livery.name} equipped.` };
   }
   const credits = Math.floor(save.credits);
-  if (credits < livery.cost) return { save, ok: false, hint: `Need ${livery.cost} cr.` };
+  if (credits < livery.cost) return { save, ok: false, hint: `Need ${formatCredits(livery.cost)}.` };
   const next = paintCar(save, livery.car, livery.color, livery.secondary, livery.accent, livery.id);
   return {
     save: {
@@ -294,5 +294,5 @@ export function equipLivery<T extends GarageState>(save: T, liveryId: string): T
 }
 
 export function formatCredits(value: number): string {
-  return `${Math.floor(Math.max(0, value)).toLocaleString("en-US")} cr`;
+  return `${Math.floor(Math.max(0, value)).toLocaleString("en-US")} CR`;
 }

@@ -15,7 +15,6 @@ import {
   buyLivery,
   buyPart,
   carAvailable,
-  carPartCap,
   emptyCarGarage,
   fittedSpec,
   formatCredits,
@@ -25,9 +24,7 @@ import {
   PARTS,
   partDelta,
   partRequirement,
-  partTotal,
   rankCost,
-  upgradePool,
   type PartId,
 } from "./garage";
 import {
@@ -874,22 +871,24 @@ export class Game {
   }
 
   private renderTitle() {
-    this.ui.cars.innerHTML = CARS.map((car) => {
+    this.ui.cars.innerHTML = CARS.map((car, index) => {
       const owned = ownsCar(this.save, car.id);
       const selected = this.save.selectedCar === car.id;
       const available = carAvailable(this.save, car.id);
       const spec = fittedSpec(this.save, car.id);
-      const ranks = partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id));
-      let status: string;
-      if (owned) status = `${Math.round(spec.topSpeed)} kph · ${ranks} / ${carPartCap()}`;
-      else if (available) status = `Buy · ${formatCredits(car.unlockCost)}`;
-      else status = `Unlock at ${car.unlockBest.toLocaleString("en-US")} m`;
       const locked = !owned && !available;
-      return `<button class="car ${selected && owned ? "selected" : ""} ${locked ? "locked" : ""}" data-car="${car.id}" ${locked ? "disabled" : ""}>
-        <i class="swatch" style="background:${hex(spec.color)}"></i>
+      const speed = owned
+        ? `${Math.round(spec.topSpeed)}`
+        : available
+          ? `${car.unlockCost.toLocaleString("en-US")}`
+          : `${car.unlockBest.toLocaleString("en-US")}`;
+      const unit = owned ? "kph" : available ? "CR" : "m";
+      const line = owned ? car.blurb.split(".")[0] : available ? "Buy onto the grid" : "Locked";
+      return `<button class="car ${selected && owned ? "selected" : ""} ${locked ? "locked" : ""}" data-car="${car.id}" style="--car:${hex(spec.color)}" ${locked ? "disabled" : ""}>
+        <span class="car-num">${String(index + 1).padStart(2, "0")}</span>
         <strong>${car.name}</strong>
-        <span>${car.blurb}</span>
-        <em>${status}</em>
+        <span>${line}</span>
+        <em>${speed}<small>${unit}</small></em>
       </button>`;
     }).join("");
     this.ui.statScore.textContent = formatScore(this.save.bestScore);
@@ -904,17 +903,17 @@ export class Game {
     this.ui.resultNear.textContent = String(this.run.nearMisses);
     this.ui.resultPass.textContent = String(this.run.overtakes);
     this.ui.resultCombo.textContent = `×${this.run.maxCombo}`;
-    this.ui.resultBest.textContent = this.lastBest ? "New personal best" : "Run complete";
+    this.ui.resultBest.textContent = this.lastBest ? "Personal best" : "Chequered";
     this.ui.resultBest.classList.toggle("gold", this.lastBest);
-    this.ui.resultCredits.textContent = `+${formatCredits(this.lastCredits)}  ·  ${formatCredits(this.save.credits)} in wallet`;
+    this.ui.resultCredits.innerHTML = `+${formatCredits(this.lastCredits)} <span>${formatCredits(this.save.credits)} banked</span>`;
     const canDouble = canDoubleReward(this.lastGrant);
     this.ui.resultDouble?.toggleAttribute("disabled", !canDouble);
     this.ui.resultDouble?.classList.toggle("hidden", !canDouble && Boolean(this.lastGrant?.doubled));
     if (this.ui.resultAdNote) {
       this.ui.resultAdNote.textContent = canDouble
-        ? "Watch a short placement to double this payout. Once per run."
+        ? "Double this payout once. Optional."
         : this.lastGrant?.doubled
-          ? "Credits already doubled for this run."
+          ? "Already doubled this run."
           : "";
     }
   }
@@ -925,32 +924,36 @@ export class Game {
     if (this.ui.garageLadder) {
       this.ui.garageLadder.textContent =
         this.save.totalRuns === 0 && this.save.credits === 0
-          ? "Race to earn credits · 12 ranks per part"
-          : `${upgradePool()} upgrades · ${MAX_PART_RANK} ranks per part`;
+          ? "Race nights pay for spec"
+          : "Four trees. One rank at a time.";
     }
     const spec = fittedSpec(this.save, this.garageCar);
     if (this.ui.garageSpecs) {
       this.ui.garageSpecs.innerHTML = `
-        <div><dt>Top speed</dt><dd>${Math.round(spec.topSpeed)} kph</dd></div>
-        <div><dt>Accel</dt><dd>${spec.accel.toFixed(1)}</dd></div>
-        <div><dt>Steer</dt><dd>${spec.steer.toFixed(1)}</dd></div>
-        <div><dt>Boost fill</dt><dd>${spec.boostNearMissCharge.toFixed(2)}</dd></div>`;
+        <div><dt>Top</dt><dd>${Math.round(spec.topSpeed)} kph</dd></div>
+        <div><dt>Steer</dt><dd>${spec.steer.toFixed(0)}</dd></div>
+        <div><dt>Accel</dt><dd>${spec.accel.toFixed(0)}</dd></div>
+        <div><dt>Charge</dt><dd>${spec.boostNearMissCharge.toFixed(2)}</dd></div>`;
     }
     if (this.ui.garageCars) {
-      this.ui.garageCars.innerHTML = CARS.map((car) => {
+      this.ui.garageCars.innerHTML = CARS.map((car, index) => {
         const owned = ownsCar(this.save, car.id);
         const selected = this.garageCar === car.id;
         const available = carAvailable(this.save, car.id);
         const locked = !owned && !available;
+        const spec = fittedSpec(this.save, car.id);
+        const paint = hex(spec.color);
         const label = owned
-          ? `${partTotal(this.save.garage[car.id] ?? emptyCarGarage(car.id))} / ${carPartCap()}`
+          ? `${Math.round(spec.topSpeed)}`
           : available
-            ? `Buy · ${formatCredits(car.unlockCost)}`
-            : `Unlock at ${car.unlockBest.toLocaleString("en-US")} m`;
-        return `<button class="car ${selected ? "selected" : ""} ${locked ? "locked" : ""}" data-garage-car="${car.id}" ${locked ? "disabled" : ""}>
-          <i class="swatch" style="background:${hex(fittedSpec(this.save, car.id).color)}"></i>
+            ? car.unlockCost.toLocaleString("en-US")
+            : car.unlockBest >= 1000
+              ? `${(car.unlockBest / 1000).toFixed(1)}k`
+              : car.unlockBest.toLocaleString("en-US");
+        return `<button class="car ${selected ? "selected" : ""} ${locked ? "locked" : ""}" data-garage-car="${car.id}" style="--car:${paint}" ${locked ? "disabled" : ""}>
+          <span class="car-num">${String(index + 1).padStart(2, "0")}</span>
           <strong>${car.name}</strong>
-          <em>${label}</em>
+          <em>${label}<small>${owned ? "kph" : available ? "CR" : "m"}</small></em>
         </button>`;
       }).join("");
     }
@@ -967,11 +970,10 @@ export class Game {
             return `<button class="part ${locked ? "locked-req" : ""}" data-part="${part.id}" ${maxed || locked ? "disabled" : ""}>
               <div>
                 <strong>${part.name}</strong>
-                <span>${part.blurb} · ${part.impact}</span>
                 <span class="next">${next}</span>
                 <div class="rank-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
               </div>
-              <em>${maxed ? `Rank ${MAX_PART_RANK} / ${MAX_PART_RANK}` : locked ? `Locked` : `Rank ${rank} / ${MAX_PART_RANK} · ${formatCredits(cost)}`}</em>
+              <em>${maxed ? "Max" : locked ? "Locked" : formatCredits(cost)}</em>
             </button>`;
           }).join("")
         : `<p class="hint">Buy this car before you can spec it.</p>`;
@@ -982,7 +984,7 @@ export class Game {
             .map((item) => {
               const have = this.save.ownedLiveries.includes(item.id);
               const equipped = row.livery === item.id;
-              return `<button class="livery ${equipped ? "selected" : ""}" data-livery="${item.id}">
+              return `<button class="livery ${equipped ? "selected" : ""}" data-livery="${item.id}" style="--car:${hex(item.color)}">
                 <strong>${item.name}</strong>
                 <em>${have ? (equipped ? "On" : "Equip") : formatCredits(item.cost)}</em>
               </button>`;
@@ -1030,8 +1032,8 @@ export class Game {
     if (this.ui.garageHint) {
       this.ui.garageHint.textContent =
         this.save.totalRuns === 0 && this.save.credits === 0
-          ? "Race first. Credits come from distance, near misses, and overtakes — not from this screen."
-          : `Ranks 1–3 are open. Later ranks need a spread setup. Full spec is ${carPartCap()} on this car.`;
+          ? "Race first. Credits come from the circuit."
+          : "Early ranks are cheap. Full spec takes many nights.";
     }
     this.renderGarage();
   }
@@ -1141,19 +1143,25 @@ export class Game {
     const music = this.ui.music as HTMLInputElement;
     const motion = this.ui.motion as HTMLInputElement;
     const haptics = this.ui.haptics as HTMLInputElement;
-    const hudSpeed = this.ui.hudSpeed as HTMLSelectElement;
+    const hudSpeed = this.ui.hudSpeed;
+    const syncHudSide = (side: "left" | "right") => {
+      hudSpeed.dataset.side = side;
+      hudSpeed.querySelectorAll<HTMLButtonElement>("button[data-side]").forEach((btn) => {
+        btn.classList.toggle("is-on", btn.dataset.side === side);
+      });
+    };
     sfx.value = String(this.save.sfxVolume);
     music.value = String(this.save.musicVolume);
     motion.checked = this.save.reducedMotion;
     haptics.checked = this.save.haptics;
-    hudSpeed.value = this.save.hudSpeedSide;
+    syncHudSide(this.save.hudSpeedSide);
     this.ui.hud.dataset.speed = this.save.hudSpeedSide;
     const persist = () => {
       this.save.sfxVolume = Number(sfx.value);
       this.save.musicVolume = Number(music.value);
       this.save.reducedMotion = motion.checked;
       this.save.haptics = haptics.checked;
-      this.save.hudSpeedSide = hudSpeed.value === "right" ? "right" : "left";
+      this.save.hudSpeedSide = hudSpeed.dataset.side === "right" ? "right" : "left";
       this.ui.hud.dataset.speed = this.save.hudSpeedSide;
       this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
       writeSave(this.save);
@@ -1162,7 +1170,12 @@ export class Game {
     music.addEventListener("input", persist);
     motion.addEventListener("change", persist);
     haptics.addEventListener("change", persist);
-    hudSpeed.addEventListener("change", persist);
+    hudSpeed.addEventListener("click", (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-side]");
+      if (!btn?.dataset.side) return;
+      syncHudSide(btn.dataset.side === "right" ? "right" : "left");
+      persist();
+    });
     this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
 
     this.ui.brakeBtn.addEventListener("pointerdown", () => this.input.setBrakeButton(true));
@@ -1215,7 +1228,7 @@ export class Game {
     const bar = this.ui.adBar;
     overlay.classList.remove("hidden");
     this.setAdChrome(true);
-    if (status) status.textContent = kind === "rewarded" ? "Rewarded placement…" : "Break placement…";
+    if (status) status.textContent = kind === "rewarded" ? "Doubling this payout…" : "Stand by…";
     if (bar) {
       bar.style.animation = "none";
       void bar.offsetWidth;
@@ -1283,7 +1296,7 @@ export class Game {
     if (this.ui.stageLabel) this.ui.stageLabel.textContent = zoneAt(dist).name;
     if (this.ui.stageMode) {
       this.ui.stageMode.textContent =
-        id === "results" ? "Debrief" : id === "garage" ? "Garage" : id === "settings" ? "Settings" : "Preview";
+        id === "results" ? "Debrief" : id === "garage" ? "Pit" : id === "settings" ? "Box" : "Grid";
     }
   }
 
