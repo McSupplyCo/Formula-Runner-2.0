@@ -9,23 +9,35 @@ import { InputController } from "./input";
 import { clamp, damp, formatDistance, formatScore, headingOffset, laneCenter } from "./math";
 import { lanesBlockedNear, materializePattern, pickFairPattern, type TrafficCar } from "./patterns";
 import { applyDoubleReward, canDoubleReward, shouldShowInterstitial, type RewardGrant } from "./ads";
-import { commitRun, hasStoredSave, loadSave, writeSave, type SaveData } from "./save";
+import { commitRun, hasStoredSave, HUD_SKINS, loadSave, writeSave, type HudSkin, type SaveData } from "./save";
 import {
   buyCar,
   buyLivery,
   buyPart,
+  buyWorld,
   carAvailable,
   emptyCarGarage,
   fittedSpec,
   formatCredits,
+  GLOWS,
   LIVERIES,
   ownsCar,
+  ownsWorld,
   paintCar,
+  paintGlow,
+  paintRim,
+  paintTrail,
   PARTS,
   partDelta,
   partRequirement,
   rankCost,
+  RIMS,
+  setCarNumber,
+  TRAILS,
+  WORLD_UNLOCK,
+  worldAvailable,
   type PartId,
+  type WorldId,
 } from "./garage";
 import {
   difficultyAt,
@@ -38,7 +50,7 @@ import {
 import { emptyRun, type GameMode, type RunStats } from "./state";
 import { ADS, BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD, SPAWN, type CarId } from "./tuning";
 import { createFormulaCar, createTrafficCar, disposeCar } from "./vehicles";
-import { TrackWorld, zoneAt } from "./world";
+import { TrackWorld, worldById, zoneAt } from "./world";
 import { makeNightEnv } from "./env";
 
 function hex(color: number) {
@@ -121,12 +133,16 @@ export class Game {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = BLOOM.exposure;
-    this.scene.environment = makeNightEnv(this.renderer);
+    this.scene.environment = makeNightEnv(this.renderer, worldById(this.save.selectedWorld));
     this.scene.environmentIntensity = 0.85;
 
-    this.world = new TrackWorld(this.scene);
+    this.world = new TrackWorld(this.scene, worldById(this.save.selectedWorld));
     const paint = fittedSpec(this.save, this.save.selectedCar);
-    this.playerMesh = createFormulaCar(paint.color, paint.accent, paint.secondary);
+    this.playerMesh = createFormulaCar(paint.color, paint.accent, paint.secondary, {
+      rim: paint.rim,
+      number: paint.number,
+      glow: paint.glow,
+    });
     this.playerMesh.userData.paintKey = this.paintKey(this.save.selectedCar);
     this.scene.add(this.playerMesh);
     this.speedLines = this.makeSpeedLines();
@@ -522,6 +538,7 @@ export class Game {
       toast.life -= dt;
       return toast.life > 0;
     });
+    this.paintToasts();
     this.updateHud();
   }
 
@@ -836,8 +853,15 @@ export class Game {
   }
 
   private pushToast(text: string, color: string) {
-    this.toasts.unshift({ text, life: 1.1, color });
+    this.toasts.unshift({ text, life: 1.6, color });
     this.toasts = this.toasts.slice(0, 3);
+    this.paintToasts();
+  }
+
+  private paintToasts() {
+    this.ui.toast.innerHTML = this.toasts
+      .map((toast) => `<div style="color:${toast.color}">${toast.text}</div>`)
+      .join("");
   }
 
   private buzz(ms: number) {
@@ -851,14 +875,12 @@ export class Game {
     this.ui.distance.textContent = formatDistance(this.run.distance);
     this.ui.score.textContent = formatScore(this.run.score);
     this.ui.combo.textContent = this.run.combo > 0 ? `×${this.run.combo}` : "";
-    this.ui.zone.textContent = zoneAt(this.run.distance).name;
+    this.ui.zone.textContent = zoneAt(this.run.distance, this.world.circuit).name;
     const fill = this.ui.boostFill;
     fill.style.width = `${Math.round(this.run.boost * 100)}%`;
     fill.classList.toggle("ready", this.run.boost >= this.spec().boostMinCharge);
-    this.ui.toast.innerHTML = this.toasts
-      .map((toast) => `<div style="color:${toast.color}">${toast.text}</div>`)
-      .join("");
     this.ui.hud.dataset.speed = this.save.hudSpeedSide;
+    this.ui.hud.dataset.skin = this.save.hudSkin;
   }
 
   private gearLabel(speed: number) {
@@ -894,6 +916,7 @@ export class Game {
     this.ui.statScore.textContent = formatScore(this.save.bestScore);
     this.ui.statDistance.textContent = formatDistance(this.save.bestDistance);
     this.ui.statCredits.textContent = formatCredits(this.save.credits);
+    this.renderWorlds();
     this.applyCar(this.save.selectedCar);
   }
 
@@ -992,9 +1015,44 @@ export class Game {
             .join("")
         : "";
     }
+    if (this.ui.garageTrails) {
+      this.ui.garageTrails.innerHTML = owned
+        ? TRAILS.map((item) => {
+            const on = row.trail === item.color;
+            return `<button class="livery ${on ? "selected" : ""}" data-trail="${item.color}" style="--car:${hex(item.color)}">
+              <strong>${item.name}</strong>
+              <em>${on ? "On" : "Set"}</em>
+            </button>`;
+          }).join("")
+        : "";
+    }
+    if (this.ui.garageRims) {
+      this.ui.garageRims.innerHTML = owned
+        ? RIMS.map((item) => {
+            const on = row.rim === item.color;
+            return `<button class="livery ${on ? "selected" : ""}" data-rim="${item.color}" style="--car:${hex(item.color)}">
+              <strong>${item.name}</strong>
+              <em>${on ? "On" : "Set"}</em>
+            </button>`;
+          }).join("")
+        : "";
+    }
+    if (this.ui.garageGlows) {
+      this.ui.garageGlows.innerHTML = owned
+        ? GLOWS.map((item) => {
+            const on = row.glow === item.color;
+            return `<button class="livery ${on ? "selected" : ""}" data-glow="${item.color}" style="--car:${hex(item.color)}">
+              <strong>${item.name}</strong>
+              <em>${on ? "On" : "Set"}</em>
+            </button>`;
+          }).join("")
+        : "";
+    }
+    this.renderWorlds();
     const primary = this.ui.paintPrimary as HTMLInputElement | undefined;
     const secondary = this.ui.paintSecondary as HTMLInputElement | undefined;
     const accent = this.ui.paintAccent as HTMLInputElement | undefined;
+    const number = this.ui.carNumber as HTMLInputElement | undefined;
     if (primary && secondary && accent) {
       const painting = document.activeElement === primary || document.activeElement === secondary || document.activeElement === accent;
       if (!painting) {
@@ -1004,25 +1062,94 @@ export class Game {
       }
       this.ui.garagePaint?.classList.toggle("hidden", !owned);
     }
+    if (number && document.activeElement !== number) {
+      number.value = String(row.number);
+      number.disabled = !owned;
+    }
   }
 
   private paintKey(id: CarId) {
     const spec = fittedSpec(this.save, id);
-    return `${id}:${spec.color}:${spec.secondary}:${spec.accent}`;
+    return `${id}:${spec.color}:${spec.secondary}:${spec.accent}:${spec.rim}:${spec.number}:${spec.trail}:${spec.glow}`;
   }
 
   private applyCar(id: CarId) {
     const spec = fittedSpec(this.save, id);
     const key = this.paintKey(id);
+    const trailMat = this.boostTrail.material as THREE.LineBasicMaterial;
+    trailMat.color.setHex(spec.trail);
+    (this.boostGlow.material as THREE.MeshBasicMaterial).color.setHex(spec.trail);
+    this.boostLight.color.setHex(spec.trail);
     if (this.playerMesh.userData.paintKey === key) return;
     const prev = this.playerMesh;
     this.scene.remove(prev);
     disposeCar(prev);
-    this.playerMesh = createFormulaCar(spec.color, spec.accent, spec.secondary);
+    this.playerMesh = createFormulaCar(spec.color, spec.accent, spec.secondary, {
+      rim: spec.rim,
+      number: spec.number,
+      glow: spec.glow,
+    });
     this.playerMesh.userData.paintKey = key;
     this.playerMesh.position.copy(prev.position);
     this.playerMesh.rotation.copy(prev.rotation);
     this.scene.add(this.playerMesh);
+  }
+
+  private worldChip(id: WorldId) {
+    const def = WORLD_UNLOCK.find((item) => item.id === id) ?? WORLD_UNLOCK[0];
+    const world = worldById(id);
+    const owned = ownsWorld(this.save, id);
+    const available = worldAvailable(this.save, id);
+    const selected = this.save.selectedWorld === id;
+    const locked = !owned && !available;
+    const label = owned
+      ? world.tagline.split(".")[0]
+      : available
+        ? formatCredits(def.unlockCost)
+        : `${def.unlockBest.toLocaleString("en-US")} m`;
+    return `<button class="world ${selected ? "selected" : ""} ${locked ? "locked" : ""}" data-world="${id}" style="--car:${hex(world.neon)}" ${locked ? "disabled" : ""}>
+      <strong>${def.name}</strong>
+      <em>${label}</em>
+    </button>`;
+  }
+
+  private renderWorlds() {
+    const html = WORLD_UNLOCK.map((item) => this.worldChip(item.id)).join("");
+    if (this.ui.worlds) this.ui.worlds.innerHTML = html;
+    if (this.ui.garageWorlds) this.ui.garageWorlds.innerHTML = html;
+    if (this.ui.brandCircuit) this.ui.brandCircuit.textContent = worldById(this.save.selectedWorld).name;
+    if (this.ui.adCircuit) this.ui.adCircuit.textContent = worldById(this.save.selectedWorld).name;
+  }
+
+  private applyCircuit() {
+    const next = worldById(this.save.selectedWorld);
+    if (this.world.circuit.id !== next.id) {
+      this.world.setCircuit(next);
+      const prev = this.scene.environment;
+      this.scene.environment = makeNightEnv(this.renderer, next);
+      if (prev && "dispose" in prev) prev.dispose();
+      this.world.update(this.player.z, this.mode === "title" ? 0 : this.run.distance);
+    }
+    if (this.ui.brandCircuit) this.ui.brandCircuit.textContent = next.name;
+    if (this.ui.adCircuit) this.ui.adCircuit.textContent = next.name;
+  }
+
+  private pickWorld(id: WorldId) {
+    const result = buyWorld(this.save, id);
+    this.save = result.save;
+    if (result.ok) {
+      writeSave(this.save);
+      this.applyCircuit();
+      this.audio.playUi();
+    } else {
+      this.pushToast(result.hint, "#ff8a9a");
+      this.audio.playDeny();
+    }
+    if (this.ui.garageHint) this.ui.garageHint.textContent = result.hint;
+    if (this.ui.gridHint) this.ui.gridHint.textContent = result.ok ? "" : result.hint;
+    this.renderWorlds();
+    this.renderTitle();
+    this.renderGarage();
   }
 
   private openGarage(from: "title" | "results") {
@@ -1046,7 +1173,10 @@ export class Game {
 
   private persistGarage(hint: string, ok: boolean) {
     if (this.ui.garageHint) this.ui.garageHint.textContent = hint;
-    if (!ok) return;
+    if (!ok) {
+      this.audio.playDeny();
+      return;
+    }
     writeSave(this.save);
     this.audio.playUpgrade();
     this.applyCar(this.save.selectedCar);
@@ -1081,8 +1211,15 @@ export class Game {
       }
       const result = buyCar(this.save, id);
       this.save = result.save;
-      if (result.ok) writeSave(this.save);
-      this.audio.playUi();
+      if (result.ok) {
+        writeSave(this.save);
+        this.audio.playUi();
+        if (this.ui.gridHint) this.ui.gridHint.textContent = "";
+      } else {
+        this.pushToast(result.hint, "#ff8a9a");
+        this.audio.playDeny();
+        if (this.ui.gridHint) this.ui.gridHint.textContent = result.hint;
+      }
       this.renderTitle();
     });
     this.ui.garageCars?.addEventListener("click", (event) => {
@@ -1120,6 +1257,37 @@ export class Game {
       this.save = result.save;
       this.persistGarage(result.hint, result.ok);
     });
+    const onWorld = (event: Event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-world]");
+      if (!button || button.disabled) return;
+      this.pickWorld(button.dataset.world as WorldId);
+    };
+    this.ui.worlds?.addEventListener("click", onWorld);
+    this.ui.garageWorlds?.addEventListener("click", onWorld);
+    this.ui.garageTrails?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-trail]");
+      if (!button) return;
+      this.save = paintTrail(this.save, this.garageCar, Number(button.dataset.trail));
+      this.persistGarage("Trail set.", true);
+    });
+    this.ui.garageRims?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-rim]");
+      if (!button) return;
+      this.save = paintRim(this.save, this.garageCar, Number(button.dataset.rim));
+      this.persistGarage("Rims set.", true);
+    });
+    this.ui.garageGlows?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-glow]");
+      if (!button) return;
+      this.save = paintGlow(this.save, this.garageCar, Number(button.dataset.glow));
+      this.persistGarage("Glow set.", true);
+    });
+    this.ui.carNumber?.addEventListener("input", () => {
+      const input = this.ui.carNumber as HTMLInputElement;
+      this.save = setCarNumber(this.save, this.garageCar, Number(input.value));
+      writeSave(this.save);
+      this.applyCar(this.save.selectedCar);
+    });
     this.ui.resultDouble?.addEventListener("click", () => this.claimDouble());
     const onPaint = () => {
       if (!ownsCar(this.save, this.garageCar) || this.buying) return;
@@ -1150,19 +1318,32 @@ export class Game {
         btn.classList.toggle("is-on", btn.dataset.side === side);
       });
     };
+    const hudSkin = this.ui.hudSkin;
+    const syncHudSkin = (skin: HudSkin) => {
+      hudSkin.dataset.skin = skin;
+      hudSkin.querySelectorAll<HTMLButtonElement>("button[data-skin]").forEach((btn) => {
+        btn.classList.toggle("is-on", btn.dataset.skin === skin);
+      });
+    };
     sfx.value = String(this.save.sfxVolume);
     music.value = String(this.save.musicVolume);
     motion.checked = this.save.reducedMotion;
     haptics.checked = this.save.haptics;
     syncHudSide(this.save.hudSpeedSide);
+    syncHudSkin(this.save.hudSkin);
     this.ui.hud.dataset.speed = this.save.hudSpeedSide;
+    this.ui.hud.dataset.skin = this.save.hudSkin;
     const persist = () => {
       this.save.sfxVolume = Number(sfx.value);
       this.save.musicVolume = Number(music.value);
       this.save.reducedMotion = motion.checked;
       this.save.haptics = haptics.checked;
       this.save.hudSpeedSide = hudSpeed.dataset.side === "right" ? "right" : "left";
+      this.save.hudSkin = HUD_SKINS.includes(hudSkin.dataset.skin as HudSkin)
+        ? (hudSkin.dataset.skin as HudSkin)
+        : "classic";
       this.ui.hud.dataset.speed = this.save.hudSpeedSide;
+      this.ui.hud.dataset.skin = this.save.hudSkin;
       this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
       writeSave(this.save);
     };
@@ -1174,6 +1355,12 @@ export class Game {
       const btn = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-side]");
       if (!btn?.dataset.side) return;
       syncHudSide(btn.dataset.side === "right" ? "right" : "left");
+      persist();
+    });
+    hudSkin.addEventListener("click", (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-skin]");
+      if (!btn?.dataset.skin) return;
+      syncHudSkin(btn.dataset.skin as HudSkin);
       persist();
     });
     this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
@@ -1228,6 +1415,7 @@ export class Game {
     const bar = this.ui.adBar;
     overlay.classList.remove("hidden");
     this.setAdChrome(true);
+    if (this.ui.adCircuit) this.ui.adCircuit.textContent = worldById(this.save.selectedWorld).name;
     if (status) status.textContent = kind === "rewarded" ? "Doubling this payout…" : "Stand by…";
     if (bar) {
       bar.style.animation = "none";
@@ -1293,7 +1481,7 @@ export class Game {
     this.ui.openGarage.classList.toggle("is-active", id === "garage");
     this.ui.openSettings.classList.toggle("is-active", id === "settings");
     const dist = this.mode === "results" ? this.run.distance : 0;
-    if (this.ui.stageLabel) this.ui.stageLabel.textContent = zoneAt(dist).name;
+    if (this.ui.stageLabel) this.ui.stageLabel.textContent = zoneAt(dist, this.world.circuit).name;
     if (this.ui.stageMode) {
       this.ui.stageMode.textContent =
         id === "results" ? "Debrief" : id === "garage" ? "Pit" : id === "settings" ? "Box" : "Grid";
