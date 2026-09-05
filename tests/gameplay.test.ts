@@ -10,12 +10,20 @@ import {
 import {
   buyCar,
   buyPart,
+  buyWorld,
   carPartCap,
   creditPayout,
   fittedSpec,
+  ownsWorld,
   paintCar,
+  paintGlow,
+  paintRim,
+  paintTrail,
   rankCost,
+  setCarNumber,
   upgradePool,
+  WORLD_UNLOCK,
+  worldAvailable,
 } from "../src/game/garage";
 import {
   difficultyAt,
@@ -27,7 +35,8 @@ import {
   tickCombo,
 } from "../src/game/scoring";
 import { emptyRun } from "../src/game/state";
-import { BLOOM, CAMERA, CHASSIS, DRIVE, MAX_PART_RANK, ROAD } from "../src/game/tuning";
+import { BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD } from "../src/game/tuning";
+import { WORLDS } from "../src/game/circuits";
 import { CITY_BEHIND, CITY_SPAN, recycleCityZ } from "../src/game/world";
 
 describe("camera feel tuning", () => {
@@ -135,7 +144,7 @@ describe("garage", () => {
   });
 
   it("keeps each rank small and spreads upgrades across a long ladder", () => {
-    expect(upgradePool()).toBe(144);
+    expect(upgradePool()).toBe(CARS.length * carPartCap());
     expect(carPartCap()).toBe(48);
     expect(carPartCap()).toBe(MAX_PART_RANK * 4);
     expect(rankCost(1)).toBeGreaterThan(60);
@@ -173,6 +182,125 @@ describe("garage", () => {
     expect(paid.save.ownedCars).toContain("drift");
     expect(paid.save.credits).toBe(0);
     expect(paid.save.garage.drift.engine).toBe(0);
+  });
+
+  it("requires distance and credits before selling Volt", () => {
+    const early = buyCar(defaultSave(), "volt");
+    expect(early.ok).toBe(false);
+    const broke = buyCar({ ...defaultSave(), bestDistance: 3200, credits: 100 }, "volt");
+    expect(broke.ok).toBe(false);
+    const paid = buyCar({ ...defaultSave(), bestDistance: 3200, credits: 2800 }, "volt");
+    expect(paid.ok).toBe(true);
+    expect(paid.save.ownedCars).toContain("volt");
+    expect(paid.save.credits).toBe(0);
+    expect(paid.save.garage.volt.engine).toBe(0);
+    expect(fittedSpec(paid.save, "volt").number).toBe(44);
+  });
+
+  it("requires distance and credits before selling Nyx", () => {
+    const early = buyCar(defaultSave(), "nyx");
+    expect(early.ok).toBe(false);
+    const broke = buyCar({ ...defaultSave(), bestDistance: 4500, credits: 100 }, "nyx");
+    expect(broke.ok).toBe(false);
+    const paid = buyCar({ ...defaultSave(), bestDistance: 4500, credits: 3400 }, "nyx");
+    expect(paid.ok).toBe(true);
+    expect(paid.save.ownedCars).toContain("nyx");
+    expect(paid.save.credits).toBe(0);
+    expect(paid.save.garage.nyx.engine).toBe(0);
+    expect(fittedSpec(paid.save, "nyx").number).toBe(88);
+  });
+
+  it("keeps trail, rim, and number as free cosmetics on an owned car", () => {
+    const trailed = paintTrail(defaultSave(), "apex", 0x00e5ff);
+    expect(trailed.credits).toBe(0);
+    expect(fittedSpec(trailed, "apex").trail).toBe(0x00e5ff);
+    const rimmed = paintRim(trailed, "apex", 0xd4b45a);
+    expect(fittedSpec(rimmed, "apex").rim).toBe(0xd4b45a);
+    const numbered = setCarNumber(rimmed, "apex", 63);
+    expect(fittedSpec(numbered, "apex").number).toBe(63);
+    expect(fittedSpec(setCarNumber(rimmed, "apex", 480), "apex").number).toBe(99);
+    expect(fittedSpec(setCarNumber(rimmed, "apex", -5), "apex").number).toBe(0);
+  });
+
+  it("does not paint cosmetics onto a car the player does not own", () => {
+    const attempt = paintTrail(defaultSave(), "surge", 0xff006e);
+    expect(attempt.garage.surge.trail).toBe(0xffe0b8);
+    const glowAttempt = paintGlow(defaultSave(), "surge", 0xff006e);
+    expect(glowAttempt.garage.surge.glow).toBe(0x00e5ff);
+  });
+
+  it("paints glow on an owned car and leaves credits alone", () => {
+    const painted = paintGlow(defaultSave(), "apex", 0xff2bd6);
+    expect(painted.credits).toBe(0);
+    expect(fittedSpec(painted, "apex").glow).toBe(0xff2bd6);
+    expect(painted.garage.apex.glow).toBe(0xff2bd6);
+  });
+});
+
+describe("circuits", () => {
+  it("maps WORLD_UNLOCK from WORLDS", () => {
+    expect(WORLD_UNLOCK.length).toBe(WORLDS.length);
+    for (const world of WORLDS) {
+      const row = WORLD_UNLOCK.find((item) => item.id === world.id);
+      expect(row).toEqual({
+        id: world.id,
+        name: world.name,
+        unlockBest: world.unlockBest,
+        unlockCost: world.unlockCost,
+      });
+    }
+  });
+
+  it("gives harbor for free and gates the rest on distance then credits", () => {
+    const save = defaultSave();
+    expect(ownsWorld(save, "harbor")).toBe(true);
+    expect(worldAvailable(save, "harbor")).toBe(true);
+    expect(buyWorld(save, "harbor").ok).toBe(true);
+    expect(buyWorld(save, "harbor").save.credits).toBe(0);
+
+    expect(worldAvailable(save, "ember")).toBe(false);
+    const tooClose = buyWorld(save, "ember");
+    expect(tooClose.ok).toBe(false);
+    expect(tooClose.save.ownedWorlds).toEqual(["harbor"]);
+
+    const broke = buyWorld({ ...save, bestDistance: 700, credits: 100 }, "ember");
+    expect(broke.ok).toBe(false);
+    expect(broke.save.credits).toBe(100);
+
+    const paid = buyWorld({ ...save, bestDistance: 700, credits: 480 }, "ember");
+    expect(paid.ok).toBe(true);
+    expect(paid.save.credits).toBe(0);
+    expect(paid.save.ownedWorlds).toContain("ember");
+    expect(paid.save.selectedWorld).toBe("ember");
+    expect(buyWorld(paid.save, "ember").save.credits).toBe(0);
+  });
+
+  it("unlocks canyon and ridge at their mapped distance and cost", () => {
+    const canyon = buyWorld({ ...defaultSave(), bestDistance: 1600, credits: 980 }, "canyon");
+    expect(canyon.ok).toBe(true);
+    expect(canyon.save.credits).toBe(0);
+    expect(canyon.save.ownedWorlds).toContain("canyon");
+    expect(canyon.save.selectedWorld).toBe("canyon");
+
+    const ridge = buyWorld({ ...defaultSave(), bestDistance: 3000, credits: 1680 }, "ridge");
+    expect(ridge.ok).toBe(true);
+    expect(ridge.save.credits).toBe(0);
+    expect(ridge.save.ownedWorlds).toContain("ridge");
+    expect(ridge.save.selectedWorld).toBe("ridge");
+
+    const delta = buyWorld({ ...defaultSave(), bestDistance: 4200, credits: 2200 }, "delta");
+    expect(delta.ok).toBe(true);
+    expect(delta.save.ownedWorlds).toContain("delta");
+
+    const sprawl = buyWorld({ ...defaultSave(), bestDistance: 5800, credits: 3100 }, "sprawl");
+    expect(sprawl.ok).toBe(true);
+    expect(sprawl.save.ownedWorlds).toContain("sprawl");
+  });
+
+  it("refuses an unknown circuit id", () => {
+    const result = buyWorld({ ...defaultSave(), bestDistance: 9000, credits: 9000 }, "atlantis" as "ember");
+    expect(result.ok).toBe(false);
+    expect(result.save.credits).toBe(9000);
   });
 });
 

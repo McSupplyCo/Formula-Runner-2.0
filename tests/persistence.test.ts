@@ -134,3 +134,102 @@ describe("run settlement", () => {
     expect(next.garage.apex.accent).toBe(0x778899);
   });
 });
+
+describe("cosmetics and world unlocks migrate additively", () => {
+  it("fills trail, rim, and number defaults for a save written before they existed", () => {
+    const next = migrateSave({
+      version: 4,
+      garage: {
+        apex: { engine: 2, tires: 1, turbo: 0, aero: 0, livery: "apex-stock", primary: 1, secondary: 2, accent: 3 },
+        drift: { engine: 0, tires: 0, turbo: 0, aero: 0, livery: "drift-stock" },
+      },
+    });
+    expect(next.garage.apex.trail).toBe(0xffe0b8);
+    expect(next.garage.apex.rim).toBe(0xb8c0c8);
+    expect(next.garage.apex.number).toBe(1);
+    expect(next.garage.apex.glow).toBe(0x00e5ff);
+    expect(next.garage.drift.number).toBe(11);
+    expect(next.garage.surge.number).toBe(27);
+    expect(next.garage.apex.engine).toBe(2);
+  });
+
+  it("keeps stored cosmetics and clamps a tampered number", () => {
+    const next = migrateSave({
+      version: 4,
+      garage: { apex: { engine: 0, livery: "apex-stock", trail: 0xff006e, rim: 0x1a1c20, number: 4000 } },
+    });
+    expect(next.garage.apex.trail).toBe(0xff006e);
+    expect(next.garage.apex.rim).toBe(0x1a1c20);
+    expect(next.garage.apex.number).toBe(99);
+  });
+
+  it("adds a stock Volt garage row to an older save", () => {
+    const next = migrateSave({ version: 4, credits: 300, garage: { apex: { engine: 1 } } });
+    expect(next.garage.volt).toBeDefined();
+    expect(next.garage.volt.engine).toBe(0);
+    expect(next.garage.volt.livery).toBe("volt-stock");
+    expect(next.garage.volt.primary).toBe(0xffd600);
+    expect(next.garage.volt.number).toBe(44);
+    expect(next.ownedCars).not.toContain("volt");
+    expect(next.ownedLiveries).toContain("volt-stock");
+  });
+
+  it("adds a stock Nyx garage row to an older save", () => {
+    const next = migrateSave({ version: 4, credits: 300, garage: { apex: { engine: 1 } } });
+    expect(next.garage.nyx).toBeDefined();
+    expect(next.garage.nyx.engine).toBe(0);
+    expect(next.garage.nyx.livery).toBe("nyx-stock");
+    expect(next.garage.nyx.primary).toBe(0x7a5cff);
+    expect(next.garage.nyx.number).toBe(88);
+    expect(next.garage.nyx.glow).toBe(0x00e5ff);
+    expect(next.ownedCars).not.toContain("nyx");
+    expect(next.ownedLiveries).toContain("nyx-stock");
+  });
+
+  it("defaults the world fields and always keeps harbor owned", () => {
+    const fresh = migrateSave({});
+    expect(fresh.selectedWorld).toBe("harbor");
+    expect(fresh.ownedWorlds).toEqual(["harbor"]);
+    expect(fresh.hudSkin).toBe("classic");
+    expect(migrateSave({ ownedWorlds: ["canyon"] }).ownedWorlds).toContain("harbor");
+    expect(migrateSave({ ownedWorlds: "nope" }).ownedWorlds).toEqual(["harbor"]);
+  });
+
+  it("rejects unknown world and HUD skin values instead of trusting them", () => {
+    const next = migrateSave({ selectedWorld: "moon", ownedWorlds: ["harbor", "moon"], hudSkin: "neon" });
+    expect(next.selectedWorld).toBe("harbor");
+    expect(next.ownedWorlds).toEqual(["harbor"]);
+    expect(next.hudSkin).toBe("classic");
+  });
+
+  it("keeps a legitimately owned world selected", () => {
+    const next = migrateSave({ selectedWorld: "ridge", ownedWorlds: ["harbor", "ridge"], hudSkin: "broadcast" });
+    expect(next.selectedWorld).toBe("ridge");
+    expect(next.ownedWorlds).toEqual(["harbor", "ridge"]);
+    expect(next.hudSkin).toBe("broadcast");
+  });
+
+  it("keeps voltage and timing HUD skins and falls back from unknown", () => {
+    expect(migrateSave({ hudSkin: "voltage" }).hudSkin).toBe("voltage");
+    expect(migrateSave({ hudSkin: "timing" }).hudSkin).toBe("timing");
+    expect(migrateSave({ hudSkin: "neon" }).hudSkin).toBe("classic");
+  });
+
+  it("does not checksum cosmetics, world, or HUD skin", () => {
+    const save = withChecksum(defaultSave());
+    expect(checksumMatches({ ...save, hudSkin: "ghost" })).toBe(true);
+    expect(checksumMatches({ ...save, selectedWorld: "ember", ownedWorlds: ["harbor", "ember"] })).toBe(true);
+    expect(
+      checksumMatches({
+        ...save,
+        garage: { ...save.garage, apex: { ...save.garage.apex, trail: 0x123456, rim: 0x654321, number: 7, glow: 0xff2bd6 } },
+      }),
+    ).toBe(true);
+    expect(
+      checksumMatches({
+        ...save,
+        garage: { ...save.garage, apex: { ...save.garage.apex, glow: 0xff5a2a } },
+      }),
+    ).toBe(true);
+  });
+});

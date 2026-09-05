@@ -1,9 +1,15 @@
 import {
   creditPayout,
+  DEFAULT_GLOW,
+  DEFAULT_RIM,
+  DEFAULT_TRAIL,
+  defaultCarNumber,
   emptyCarGarage,
   emptyGarage,
+  HOME_WORLD,
   LIVERIES,
   stockLiveries,
+  WORLD_UNLOCK,
   type CarGarage,
   type PartId,
 } from "./garage";
@@ -11,6 +17,10 @@ import { CARS, MAX_PART_RANK, SAVE_BACKUP_KEY, SAVE_KEY, SAVE_VERSION, type CarI
 import { clamp } from "./math";
 
 export type HudSpeedSide = "left" | "right";
+
+export type HudSkin = "classic" | "broadcast" | "ghost" | "voltage" | "timing";
+
+export const HUD_SKINS: HudSkin[] = ["classic", "broadcast", "ghost", "voltage", "timing"];
 
 export type SaveData = {
   version: number;
@@ -29,6 +39,9 @@ export type SaveData = {
   settledRunIds: string[];
   lastRewardRunId: string;
   hudSpeedSide: HudSpeedSide;
+  hudSkin: HudSkin;
+  selectedWorld: string;
+  ownedWorlds: string[];
   sfxVolume: number;
   musicVolume: number;
   reducedMotion: boolean;
@@ -54,12 +67,20 @@ export const defaultSave = (): SaveData => ({
   settledRunIds: [],
   lastRewardRunId: "",
   hudSpeedSide: "left",
+  hudSkin: "classic",
+  selectedWorld: HOME_WORLD,
+  ownedWorlds: [HOME_WORLD],
   sfxVolume: 0.8,
   musicVolume: 0.45,
   reducedMotion: false,
   haptics: true,
 });
 
+/**
+ * Covers credits, ranks, owned cars, and paint. Cosmetics (trail/rim/number/glow) and
+ * world/HUD picks stay out of the body on purpose: they cost nothing, and widening
+ * the body would invalidate every already-written save of this same version.
+ */
 export function fingerprint(save: Omit<SaveData, "checksum"> | SaveData): string {
   const ranks = CARS.map((car) => {
     const row = save.garage[car.id];
@@ -107,6 +128,9 @@ export function migrateSave(raw: unknown): SaveData {
     settledRunIds: parseIds(data.settledRunIds),
     lastRewardRunId: typeof data.lastRewardRunId === "string" ? data.lastRewardRunId : "",
     hudSpeedSide: data.hudSpeedSide === "right" ? "right" : "left",
+    hudSkin: parseHudSkin(data.hudSkin),
+    selectedWorld: parseWorld(data.selectedWorld),
+    ownedWorlds: parseWorlds(data.ownedWorlds),
     sfxVolume: clamp(num(data.sfxVolume, base.sfxVolume), 0, 1),
     musicVolume: clamp(num(data.musicVolume, base.musicVolume), 0, 1),
     reducedMotion: bool(data.reducedMotion, base.reducedMotion),
@@ -119,6 +143,8 @@ export function migrateSave(raw: unknown): SaveData {
   for (const id of stockLiveries()) {
     if (!next.ownedLiveries.includes(id)) next.ownedLiveries.push(id);
   }
+  if (!next.ownedWorlds.includes(HOME_WORLD)) next.ownedWorlds.unshift(HOME_WORLD);
+  if (!next.ownedWorlds.includes(next.selectedWorld)) next.selectedWorld = HOME_WORLD;
   return withChecksum(next);
 }
 
@@ -231,6 +257,10 @@ function parseGarage(value: unknown, version: number): Record<CarId, CarGarage> 
       primary: color(item.primary, preset?.color ?? stock.primary),
       secondary: color(item.secondary, preset?.secondary ?? stock.secondary),
       accent: color(item.accent, preset?.accent ?? stock.accent),
+      trail: color(item.trail, DEFAULT_TRAIL),
+      rim: color(item.rim, DEFAULT_RIM),
+      number: clamp(Math.floor(num(item.number, defaultCarNumber(car.id))), 0, 99),
+      glow: color(item.glow, DEFAULT_GLOW),
     };
   }
   return next;
@@ -253,6 +283,20 @@ function parseLiveries(value: unknown): string[] {
   if (!Array.isArray(value)) return stockLiveries();
   const ids = value.filter((id): id is string => typeof id === "string");
   return ids.length ? ids : stockLiveries();
+}
+
+function parseHudSkin(value: unknown): HudSkin {
+  return HUD_SKINS.includes(value as HudSkin) ? (value as HudSkin) : "classic";
+}
+
+function parseWorld(value: unknown): string {
+  return WORLD_UNLOCK.some((world) => world.id === value) ? (value as string) : HOME_WORLD;
+}
+
+function parseWorlds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [HOME_WORLD];
+  const ids = value.filter((id): id is string => WORLD_UNLOCK.some((world) => world.id === id));
+  return ids.includes(HOME_WORLD) ? ids : [HOME_WORLD, ...ids];
 }
 
 function parseIds(value: unknown): string[] {

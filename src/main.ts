@@ -72,6 +72,16 @@ const ids = [
   "adStatus",
   "adBar",
   "hudSpeed",
+  "hudSkin",
+  "worlds",
+  "garageWorlds",
+  "garageTrails",
+  "garageRims",
+  "garageGlows",
+  "carNumber",
+  "brandCircuit",
+  "adCircuit",
+  "gridHint",
 ] as const;
 
 const ui = Object.fromEntries(
