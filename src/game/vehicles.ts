@@ -50,6 +50,47 @@ function rim() {
   return mat("rim", { color: 0xb8c0c8, metalness: 0.92, roughness: 0.18, envMapIntensity: 1.3 });
 }
 
+/** Player-only rim paint. Unique instance so a repaint never bleeds into traffic. */
+function rimPaint(color: number) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    metalness: 0.92,
+    roughness: 0.18,
+    envMapIntensity: 1.3,
+  });
+}
+
+function numberDecal(value: number): THREE.Material | null {
+  const label = String(Math.max(0, Math.min(99, Math.floor(value))));
+  let el: HTMLCanvasElement;
+  let ctx: CanvasRenderingContext2D | null;
+  try {
+    el = document.createElement("canvas");
+    ctx = el.getContext("2d");
+  } catch {
+    return null;
+  }
+  if (!ctx) return null;
+  el.width = 64;
+  el.height = 64;
+  ctx.clearRect(0, 0, 64, 64);
+  ctx.fillStyle = "#f4f8fb";
+  ctx.font = "700 46px 'Barlow Condensed', 'Barlow', system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, 32, 34);
+  const tex = new THREE.CanvasTexture(el);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
+
 function disc() {
   return mat("disc", { color: 0x4a4540, metalness: 0.7, roughness: 0.35 });
 }
@@ -131,20 +172,21 @@ function contactShadow(width: number, length: number) {
   return shadow;
 }
 
-function makeWheel(front: boolean) {
+function makeWheel(front: boolean, rimMat?: THREE.Material) {
   const group = new THREE.Group();
   const radius = front ? 0.31 : 0.35;
   const width = front ? 0.32 : 0.4;
+  const barrelMat = rimMat ?? rim();
   const tire = mesh(new THREE.CylinderGeometry(radius, radius, width, 28, 1, false), rubber());
   tire.rotation.z = Math.PI / 2;
   const rimBarrel = mesh(
     new THREE.CylinderGeometry(radius * 0.62, radius * 0.62, width * 0.42, 16),
-    rim(),
+    barrelMat,
   );
   rimBarrel.rotation.z = Math.PI / 2;
   const lip = mesh(
     new THREE.CylinderGeometry(radius * 0.7, radius * 0.7, width * 0.08, 18),
-    rim(),
+    barrelMat,
   );
   lip.rotation.z = Math.PI / 2;
   const brake = mesh(
@@ -182,10 +224,10 @@ function makeWheel(front: boolean) {
   return group;
 }
 
-function placeWheel(parent: THREE.Group, x: number, y: number, z: number, front: boolean) {
+function placeWheel(parent: THREE.Group, x: number, y: number, z: number, front: boolean, rimMat?: THREE.Material) {
   const mount = new THREE.Group();
   mount.position.set(x, y, z);
-  const wheel = makeWheel(front);
+  const wheel = makeWheel(front, rimMat);
   mount.add(wheel);
   const radius = front ? 0.31 : 0.35;
   const width = front ? 0.32 : 0.4;
@@ -221,10 +263,17 @@ function addHeadlights(parent: THREE.Group, y: number, z: number, spread = 0.18)
  * body: tub, nose, floor-adjacent body, front/rear wing main planes.
  * secondary: sidepods, engine cover, rear wing flap (darker body if omitted).
  * accent: team strip, tiny details, endplate pinstripe — never tires, wishbones, or halo.
+ * opts.rim / opts.number / opts.glow are player cosmetics; traffic keeps the shared materials.
  */
-export function createFormulaCar(body: number, accent: number, secondary?: number): THREE.Group {
+export function createFormulaCar(
+  body: number,
+  accent: number,
+  secondary?: number,
+  opts?: { rim?: number; number?: number; glow?: number },
+): THREE.Group {
   const group = new THREE.Group();
   group.name = "formula";
+  const rimMat = typeof opts?.rim === "number" ? rimPaint(opts.rim >>> 0) : undefined;
 
   const coat = paint(body, 0.24);
   const pod = paint(secondary ?? darkerBody(body), 0.3);
@@ -248,6 +297,25 @@ export function createFormulaCar(body: number, accent: number, secondary?: numbe
   );
   plank.position.set(0, 0.115, 0.18);
   group.add(plank);
+
+  if (typeof opts?.glow === "number" && Number.isFinite(opts.glow) && (opts.glow >>> 0) > 0x222222) {
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: opts.glow >>> 0,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const underglow = mesh(new RoundedBoxGeometry(1.4, 0.02, 3.0, 1, 0.04), glowMat);
+    underglow.position.set(0, 0.08, 0.04);
+    group.add(underglow);
+    for (const x of [-0.52, 0.52]) {
+      const podGlow = mesh(new THREE.BoxGeometry(0.36, 0.018, 1.2), glowMat);
+      podGlow.position.set(x, 0.08, -0.1);
+      group.add(podGlow);
+    }
+  }
 
   const tub = mesh(new RoundedBoxGeometry(0.7, 0.32, 1.65, 3, 0.08), coat);
   tub.position.set(0, 0.4, 0.16);
@@ -428,10 +496,33 @@ export function createFormulaCar(body: number, accent: number, secondary?: numbe
     group.add(mirror);
   }
 
-  placeWheel(group, -0.8, 0.31, 1.38, true);
-  placeWheel(group, 0.8, 0.31, 1.38, true);
-  placeWheel(group, -0.86, 0.35, -1.18, false);
-  placeWheel(group, 0.86, 0.35, -1.18, false);
+  if (typeof opts?.number === "number") {
+    const decal = numberDecal(opts.number);
+    if (decal) {
+      const plate = mesh(new THREE.PlaneGeometry(0.34, 0.28), decal);
+      plate.rotation.x = -Math.PI / 2;
+      plate.position.set(0, 0.685, -0.66);
+      plate.renderOrder = 2;
+      group.add(plate);
+      const nosePlate = mesh(new THREE.PlaneGeometry(0.22, 0.18), decal);
+      nosePlate.rotation.x = -Math.PI / 2;
+      nosePlate.position.set(0, 0.5, 1.72);
+      nosePlate.renderOrder = 2;
+      group.add(nosePlate);
+      for (const x of [-0.72, 0.72]) {
+        const side = mesh(new THREE.PlaneGeometry(0.18, 0.14), decal);
+        side.position.set(x, 0.55, -0.15);
+        side.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2;
+        side.renderOrder = 2;
+        group.add(side);
+      }
+    }
+  }
+
+  placeWheel(group, -0.8, 0.31, 1.38, true, rimMat);
+  placeWheel(group, 0.8, 0.31, 1.38, true, rimMat);
+  placeWheel(group, -0.86, 0.35, -1.18, false, rimMat);
+  placeWheel(group, 0.86, 0.35, -1.18, false, rimMat);
 
   wishbone(group, -0.34, 0.32, 1.12, -0.72, 0.28, 1.38);
   wishbone(group, 0.34, 0.32, 1.12, 0.72, 0.28, 1.38);
@@ -706,7 +797,11 @@ export function disposeCar(group: THREE.Group): void {
       obj.dispose();
     }
   });
-  for (const material of drop) material.dispose();
+  for (const material of drop) {
+    const map = (material as THREE.MeshBasicMaterial).map;
+    if (map && map !== carbonMap) map.dispose();
+    material.dispose();
+  }
 }
 
 export function createLightPole(): THREE.Group {

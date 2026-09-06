@@ -92,6 +92,10 @@ export class GameAudio {
     this.blip(620, 0.05, "square", 0.04);
   }
 
+  playDeny() {
+    this.blip(180, 0.08, "square", 0.03);
+  }
+
   playCountdown(step: number) {
     this.blip(step >= 3 ? 880 : 520, 0.12, "square", 0.07);
   }
