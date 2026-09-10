@@ -29,6 +29,8 @@ const ids = [
   "zone",
   "boostFill",
   "gear",
+  "rpm",
+  "raceFill",
   "toast",
   "resultScore",
   "resultDistance",
@@ -95,4 +97,10 @@ const ui = Object.fromEntries(
 const game = new Game(canvas, ui);
 if (import.meta.env.DEV || new URLSearchParams(location.search).has("debug")) {
   Object.assign(window, { game });
+}
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    game.dispose();
+    delete (window as Window & { game?: Game }).game;
+  });
 }

@@ -37,7 +37,7 @@ import {
 import { emptyRun } from "../src/game/state";
 import { BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD } from "../src/game/tuning";
 import { WORLDS } from "../src/game/circuits";
-import { CITY_BEHIND, CITY_SPAN, recycleCityZ } from "../src/game/world";
+import { CITY_BEHIND, CITY_SPAN, HORIZON_APPEAR, HORIZON_SOLID, horizonReveal, recycleCityZ } from "../src/game/world";
 
 describe("camera feel tuning", () => {
   it("keeps chase camera contract names", () => {
@@ -420,6 +420,16 @@ describe("city recycle", () => {
       expect(once).toBeGreaterThanOrEqual(playerZ - CITY_BEHIND);
       z = once;
     }
+  });
+});
+
+describe("horizon reveal", () => {
+  it("hides props at recycle range so they do not pop on camera", () => {
+    expect(horizonReveal(CITY_SPAN - CITY_BEHIND)).toBe(0);
+    expect(horizonReveal(HORIZON_APPEAR)).toBe(0);
+    expect(horizonReveal(HORIZON_SOLID)).toBe(1);
+    expect(horizonReveal(120)).toBe(1);
+    expect(horizonReveal(-40)).toBe(0);
   });
 });
 

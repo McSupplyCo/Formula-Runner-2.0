@@ -21,27 +21,33 @@
             <span id="brandCircuit">Voltage Circuit</span>
             <strong>Formula Runner</strong>
           </header>
-          <nav class="nav" aria-label="Main">
-            <button id="navHome" class="nav-btn is-active" type="button">Grid</button>
-            <button id="openGarage" class="nav-btn" type="button">Pit</button>
-            <button id="openSettings" class="nav-btn" type="button">Box</button>
-          </nav>
           <dl class="shell-stats">
             <div><dt>PB</dt><dd id="statScore">0</dd></div>
             <div><dt>Dist</dt><dd id="statDistance">0 m</dd></div>
             <div><dt>Credits</dt><dd id="statCredits">0 CR</dd></div>
           </dl>
+          <nav class="nav" role="tablist" aria-label="Menu">
+            <button id="navHome" class="nav-btn is-active" type="button" role="tab" aria-selected="true" aria-controls="title" tabindex="0">Grid</button>
+            <button id="openGarage" class="nav-btn" type="button" role="tab" aria-selected="false" aria-controls="garage" tabindex="-1">Pit</button>
+            <button id="openSettings" class="nav-btn" type="button" role="tab" aria-selected="false" aria-controls="settings" tabindex="-1">Box</button>
+          </nav>
         </div>
 
         <div class="rail-body">
-        <section id="title" class="panel">
-          <p class="kicker">Lights out</p>
-          <p class="lede">Pick a circuit. Pick a car. Thread the night.</p>
-          <p class="section-label">Circuit</p>
-          <div id="worlds" class="worlds"></div>
-          <p id="gridHint" class="hint"></p>
-          <p class="section-label">Grid</p>
-          <div id="cars" class="cars"></div>
+        <section id="title" class="panel" role="tabpanel" aria-labelledby="navHome">
+          <p class="kicker">Highway</p>
+          <p class="lede">Pick a stretch. Thread traffic. Don't lift.</p>
+          <div class="subtabs" role="tablist" aria-label="Grid">
+            <button type="button" class="subtab is-active" id="gridTabCircuit" role="tab" aria-selected="true" aria-controls="gridPaneCircuit" data-subtab="circuit" tabindex="0">Circuit</button>
+            <button type="button" class="subtab" id="gridTabCars" role="tab" aria-selected="false" aria-controls="gridPaneCars" data-subtab="cars" tabindex="-1">Cars</button>
+          </div>
+          <div id="gridPaneCircuit" class="tab-pane is-active" role="tabpanel" aria-labelledby="gridTabCircuit" data-pane="circuit">
+            <div id="worlds" class="worlds"></div>
+          </div>
+          <div id="gridPaneCars" class="tab-pane" role="tabpanel" aria-labelledby="gridTabCars" data-pane="cars" hidden>
+            <div id="cars" class="cars"></div>
+            <p id="gridHint" class="hint"></p>
+          </div>
           <div class="panel-foot">
             <button id="play" class="primary" type="button">Lights out</button>
             <p class="help controls">
@@ -53,82 +59,111 @@
           </div>
         </section>
 
-        <section id="garage" class="panel hidden">
+        <section id="garage" class="panel hidden" role="tabpanel" aria-labelledby="openGarage">
           <header class="panel-head">
             <div>
               <p class="kicker">Pit</p>
               <h2>Spec</h2>
               <p id="garageLadder" class="ladder">Race to earn credits</p>
+              <p id="garageHint" class="hint">Race nights pay for spec.</p>
             </div>
             <p id="garageCredits" class="wallet">0 CR</p>
           </header>
-          <p class="section-label">Circuit</p>
-          <div id="garageWorlds" class="worlds"></div>
-          <p class="section-label">Chassis</p>
-          <div id="garageCars" class="cars"></div>
-          <div id="garageSpecs" class="spec-grid" aria-live="polite"></div>
-          <p class="section-label">Parts</p>
-          <div id="garageParts" class="parts"></div>
-          <p class="section-label">Paint</p>
-          <div id="garageLiveries" class="liveries"></div>
-          <div id="garagePaint" class="paint">
-            <label>Body <input id="paintPrimary" type="color" value="#00e5ff" /></label>
-            <label>Shade <input id="paintSecondary" type="color" value="#0a1628" /></label>
-            <label>Stripe <input id="paintAccent" type="color" value="#ff006e" /></label>
-            <label>No. <input id="carNumber" type="number" min="0" max="99" value="1" /></label>
+          <div class="subtabs" role="tablist" aria-label="Pit">
+            <button type="button" class="subtab is-active" id="pitTabCircuit" role="tab" aria-selected="true" aria-controls="pitPaneCircuit" data-subtab="circuit" tabindex="0">Circuit</button>
+            <button type="button" class="subtab" id="pitTabChassis" role="tab" aria-selected="false" aria-controls="pitPaneChassis" data-subtab="chassis" tabindex="-1">Chassis</button>
+            <button type="button" class="subtab" id="pitTabParts" role="tab" aria-selected="false" aria-controls="pitPaneParts" data-subtab="parts" tabindex="-1">Parts</button>
+            <button type="button" class="subtab" id="pitTabPaint" role="tab" aria-selected="false" aria-controls="pitPanePaint" data-subtab="paint" tabindex="-1">Paint</button>
           </div>
-          <p class="section-label">Trail</p>
-          <div id="garageTrails" class="liveries"></div>
-          <p class="section-label">Rims</p>
-          <div id="garageRims" class="liveries"></div>
-          <p class="section-label">Glow</p>
-          <div id="garageGlows" class="liveries"></div>
-          <p id="garageHint" class="hint">Race nights pay for spec.</p>
-          <button id="closeGarage" class="ghost" type="button">Back to grid</button>
+          <div id="pitPaneCircuit" class="tab-pane is-active" role="tabpanel" aria-labelledby="pitTabCircuit" data-pane="circuit">
+            <div id="garageWorlds" class="worlds"></div>
+          </div>
+          <div id="pitPaneChassis" class="tab-pane" role="tabpanel" aria-labelledby="pitTabChassis" data-pane="chassis" hidden>
+            <div id="garageCars" class="cars"></div>
+            <div id="garageSpecs" class="spec-grid" aria-live="polite"></div>
+          </div>
+          <div id="pitPaneParts" class="tab-pane" role="tabpanel" aria-labelledby="pitTabParts" data-pane="parts" hidden>
+            <div id="garageParts" class="parts"></div>
+          </div>
+          <div id="pitPanePaint" class="tab-pane" role="tabpanel" aria-labelledby="pitTabPaint" data-pane="paint" hidden>
+            <p class="section-label">Livery</p>
+            <div id="garageLiveries" class="liveries"></div>
+            <div id="garagePaint" class="paint">
+              <label>Body <input id="paintPrimary" type="color" value="#00e5ff" /></label>
+              <label>Shade <input id="paintSecondary" type="color" value="#0a1628" /></label>
+              <label>Stripe <input id="paintAccent" type="color" value="#ff006e" /></label>
+              <label>No. <input id="carNumber" type="number" min="0" max="99" value="1" /></label>
+            </div>
+            <p class="section-label">Trail</p>
+            <div id="garageTrails" class="liveries"></div>
+            <p class="section-label">Rims</p>
+            <div id="garageRims" class="liveries"></div>
+            <p class="section-label">Glow</p>
+            <div id="garageGlows" class="liveries"></div>
+          </div>
+          <button id="closeGarage" class="ghost rail-back" type="button">Back to grid</button>
         </section>
 
         <section id="results" class="panel hidden">
-          <p class="kicker" id="resultBest">Chequered</p>
-          <h2 id="resultScore">0</h2>
-          <p id="resultCredits" class="wallet credit-pop">+0 CR</p>
-          <dl class="metrics">
-            <div><dt>Distance</dt><dd id="resultDistance">0 m</dd></div>
-            <div><dt>Near misses</dt><dd id="resultNear">0</dd></div>
-            <div><dt>Overtakes</dt><dd id="resultPass">0</dd></div>
-            <div><dt>Max combo</dt><dd id="resultCombo">×0</dd></div>
-          </dl>
-          <p id="resultAdNote" class="help">Double this payout once. Optional.</p>
-          <button id="again" class="primary" type="button">Race again</button>
-          <button id="resultDouble" class="ghost" type="button">Double credits</button>
-          <button id="openGarageResults" class="ghost" type="button">Open pit</button>
-          <button id="menu" class="text-btn" type="button">Grid</button>
+          <div class="tab-pane is-active">
+            <p class="kicker" id="resultBest">Chequered</p>
+            <div class="debrief-cluster cluster">
+              <div class="debrief-score hold-readout">
+                <b aria-hidden="true">PTS</b>
+                <div>
+                  <h2 id="resultScore">0</h2>
+                  <small>SCORE</small>
+                </div>
+              </div>
+              <p id="resultCredits" class="wallet credit-pop">+0 CR</p>
+            </div>
+            <dl class="metrics">
+              <div><dt>Distance</dt><dd id="resultDistance">0 m</dd></div>
+              <div><dt>Near misses</dt><dd id="resultNear">0</dd></div>
+              <div><dt>Overtakes</dt><dd id="resultPass">0</dd></div>
+              <div><dt>Max combo</dt><dd id="resultCombo">×0</dd></div>
+            </dl>
+            <p id="resultAdNote" class="help">Double this payout once. Optional.</p>
+          </div>
+          <div class="panel-foot">
+            <div class="debrief-actions">
+              <button id="again" class="primary" type="button">Race again</button>
+              <button id="resultDouble" class="ghost" type="button">Double credits</button>
+              <button id="openGarageResults" class="ghost" type="button">Open pit</button>
+              <button id="menu" class="text-btn" type="button">Grid</button>
+            </div>
+          </div>
         </section>
 
-        <section id="settings" class="panel hidden">
+        <section id="settings" class="panel hidden" role="tabpanel" aria-labelledby="openSettings">
           <p class="kicker">Box</p>
           <h2>Radio</h2>
-          <label class="setting"><span>Engine</span><input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
-          <label class="setting"><span>Bed</span><input id="music" type="range" min="0" max="1" step="0.01" /></label>
-          <div class="setting">
-            <span>Speedo</span>
-            <div id="hudSpeed" class="seg" role="group" aria-label="Speedo side">
-              <button type="button" data-side="left">Left</button>
-              <button type="button" data-side="right">Right</button>
+          <div class="tab-pane is-active">
+            <label class="setting"><span>Engine</span><input id="sfx" type="range" min="0" max="1" step="0.01" /></label>
+            <label class="setting"><span>Bed</span><input id="music" type="range" min="0" max="1" step="0.01" /></label>
+            <div class="setting">
+              <span>Speedo</span>
+              <div id="hudSpeed" class="seg" role="group" aria-label="Speedo side">
+                <button type="button" data-side="left">Left</button>
+                <button type="button" data-side="right">Right</button>
+              </div>
             </div>
-          </div>
-          <div class="setting">
-            <span>HUD</span>
-            <div id="hudSkin" class="seg" role="group" aria-label="HUD skin">
-              <button type="button" data-skin="classic">Classic</button>
-              <button type="button" data-skin="broadcast">Live</button>
-              <button type="button" data-skin="ghost">Ghost</button>
-              <button type="button" data-skin="voltage">Volt</button>
-              <button type="button" data-skin="timing">Split</button>
+            <div class="setting">
+              <span>HUD</span>
+              <div id="hudSkin" class="seg" role="group" aria-label="HUD skin">
+                <button type="button" data-skin="classic">Classic</button>
+                <button type="button" data-skin="broadcast">Live</button>
+                <button type="button" data-skin="ghost">Ghost</button>
+                <button type="button" data-skin="voltage">Volt</button>
+                <button type="button" data-skin="timing">Split</button>
+              </div>
             </div>
+            <label class="setting check"><span>Calm motion</span><input id="motion" type="checkbox" /></label>
+            <label class="setting check"><span>Haptics</span><input id="haptics" type="checkbox" /></label>
           </div>
-          <label class="setting check"><span>Calm motion</span><input id="motion" type="checkbox" /></label>
-          <label class="setting check"><span>Haptics</span><input id="haptics" type="checkbox" /></label>
-          <button id="closeSettings" class="ghost" type="button">Done</button>
+          <div class="panel-foot">
+            <button id="closeSettings" class="ghost" type="button">Done</button>
+          </div>
         </section>
         </div>
       </aside>
@@ -141,27 +176,41 @@
         <div id="viewport" class="viewport">
         <canvas id="view"></canvas>
         <div id="toast" class="toast" aria-live="assertive"></div>
-        <section id="hud" class="hud hidden" data-speed="left">
+        <section id="hud" class="hud hidden" data-speed="right">
+          <div class="hud-bar">
+            <button id="pauseHud" class="hud-icon" type="button" aria-label="Hold">Hold</button>
+            <div class="race-meter" aria-hidden="true"><span id="raceFill"></span></div>
+          </div>
           <div class="hud-left cluster">
-            <div class="speed"><span id="speed">0</span><small>KPH</small></div>
-            <div class="gear-row"><span>Gear</span><b id="gear">N</b></div>
+            <div class="dash">
+              <b id="gear">N</b>
+              <div class="dash-speed"><span id="speed">0</span><small>KM/H</small></div>
+              <em id="rpm">800 RPM</em>
+            </div>
             <div class="boost" aria-label="Boost"><span id="boostFill"></span></div>
           </div>
           <div class="hud-right cluster">
             <div id="score">0</div>
             <div id="distance">0 m</div>
             <div id="zone">Harbor Lights</div>
-            <button id="pauseHud" class="text-btn hud-pause" type="button">Hold</button>
           </div>
           <div id="combo" class="combo" aria-live="polite"></div>
         </section>
-        <div id="countdown" class="countdown hidden">3</div>
+        <div id="countdown" class="countdown cluster hidden">3</div>
         <section id="pause" class="stage-modal hidden">
-          <div class="modal">
-            <p class="kicker">Held</p>
-            <h2>Yellow flag</h2>
-            <button id="resume" class="primary" type="button">Green</button>
-            <button id="quit" class="ghost" type="button">Back to grid</button>
+          <div class="modal cluster">
+            <p class="kicker">Hold</p>
+            <div class="hold-readout">
+              <b aria-hidden="true">II</b>
+              <div>
+                <h2>Paused</h2>
+                <small>ESC</small>
+              </div>
+            </div>
+            <div class="hold-actions">
+              <button id="resume" class="primary" type="button">Green</button>
+              <button id="quit" class="ghost" type="button">Back to grid</button>
+            </div>
           </div>
         </section>
         <div id="touch" class="touch hidden">
@@ -171,10 +220,15 @@
         </div>
       </main>
       <div id="interstitial" class="ad-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adStatus">
-        <div class="ad-card">
+        <div class="ad-card cluster">
           <p class="kicker" id="adCircuit">Voltage Circuit</p>
-          <h2>Hold</h2>
-          <p id="adStatus">Stand by…</p>
+          <div class="hold-readout">
+            <b aria-hidden="true">—</b>
+            <div>
+              <h2>Hold</h2>
+              <p id="adStatus">Stand by…</p>
+            </div>
+          </div>
           <div class="ad-bar" aria-hidden="true"><span id="adBar"></span></div>
         </div>
       </div>

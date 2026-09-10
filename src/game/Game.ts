@@ -1,8 +1,4 @@
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { GameAudio } from "./audio";
 import { hits, nearMissClearance } from "./collision";
 import { InputController } from "./input";
@@ -92,8 +88,8 @@ export class Game {
   private world: TrackWorld;
   private playerMesh: THREE.Group;
   private traffic: TrafficCar[] = [];
-  private trafficMeshes = new Map<TrafficCar, THREE.Object3D>();
-  private meshPool = new Map<TrafficCar["kind"], THREE.Object3D[]>();
+  private trafficMeshes = new Map<TrafficCar, THREE.Group>();
+  private meshPool = new Map<TrafficCar["kind"], THREE.Group[]>();
   private player = { x: 0, z: 0, vx: 0, speed: 0, yaw: 0 };
   private chassis = { pitch: 0, roll: 0, y: 0, vy: 0 };
   private spawnClock = 0.6;
@@ -119,22 +115,33 @@ export class Game {
   private boostTrail: THREE.Line;
   private boostGlow: THREE.Mesh;
   private boostLight: THREE.PointLight;
-  private composer: EffectComposer | null = null;
-  private bloomPass: UnrealBloomPass | null = null;
   private ui: Record<string, HTMLElement>;
   private frames = 0;
   private fpsAccum = 0;
   private hidden = false;
+  private raf = 0;
+  private disposed = false;
 
   constructor(canvas: HTMLCanvasElement, ui: Record<string, HTMLElement>) {
     this.ui = ui;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false,
+      powerPreference: "high-performance",
+    });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.autoClear = true;
+    this.renderer.setClearColor(0x9ec4e0, 1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = BLOOM.exposure;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.scene.environment = makeNightEnv(this.renderer, worldById(this.save.selectedWorld));
-    this.scene.environmentIntensity = 0.85;
+    this.scene.environmentIntensity = 1.15;
 
     this.world = new TrackWorld(this.scene, worldById(this.save.selectedWorld));
     const paint = fittedSpec(this.save, this.save.selectedCar);
@@ -156,7 +163,6 @@ export class Game {
     this.scene.add(this.boostGlow);
     this.boostLight = new THREE.PointLight(0xffd8a8, 0, 8, 2);
     this.scene.add(this.boostLight);
-    this.setupBloom();
 
     this.input.attach(canvas);
     this.bindUi();
@@ -174,6 +180,17 @@ export class Game {
     this.world.update(0, 0);
     this.sync(0.016);
     this.tick();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    cancelAnimationFrame(this.raf);
+    window.removeEventListener("resize", this.resize);
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    this.renderer.setAnimationLoop(null);
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 
   startRun() {
@@ -205,7 +222,8 @@ export class Game {
   }
 
   private tick = () => {
-    requestAnimationFrame(this.tick);
+    if (this.disposed) return;
+    this.raf = requestAnimationFrame(this.tick);
     const raw = this.clock.getDelta();
     const dt = Math.min(raw, DRIVE.hitchMaxDt);
     this.frames += 1;
@@ -217,8 +235,7 @@ export class Game {
       this.adaptQuality();
     }
     if (!this.hidden) this.simulate(dt);
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
   };
 
   private quality = 1;
@@ -229,12 +246,11 @@ export class Game {
     if (this.fps < 26 && this.quality > 0) {
       this.quality = 0;
       this.qualityHold = 20;
-      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.1));
-      this.disposeBloom();
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+      this.resize();
     } else if (this.qualityHold === 0 && this.fps > 54 && this.quality === 0) {
       this.quality = 1;
-      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-      if (!this.composer) this.setupBloom();
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       this.resize();
     }
   }
@@ -549,10 +565,6 @@ export class Game {
         const radius = Number(obj.userData.radius) || 0.32;
         obj.rotation.x += (v / radius) * dt;
       }
-      if (obj.userData.ground) {
-        const base = Number(obj.userData.baseScaleY) || 2;
-        (obj as THREE.Mesh).scale.y = base * (1 + speedKph / 480);
-      }
     });
   }
 
@@ -568,14 +580,14 @@ export class Game {
     const extra = this.run.boosting && !reduced ? CAMERA.fovBoostExtra : 0;
     const targetFov =
       CAMERA.fovIdle + (CAMERA.fovFast - CAMERA.fovIdle) * speedT + extra + (reduced ? 0 : this.fovKick);
-    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 6.2, dt);
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 5.4, dt);
     this.camera.updateProjectionMatrix();
 
     const heading = headingOffset(this.player.yaw, 1);
     this.desiredCam.set(
       this.player.x * 0.26 - heading.x * CAMERA.back * CAMERA.yawCam,
-      CAMERA.height + speedT * 0.1 + this.chassis.y * 0.42 - punch * 0.16 - land * CAMERA.landDrop,
-      this.player.z - CAMERA.back - speedT * 1.05 - punch * CAMERA.boostPunch,
+      CAMERA.height + speedT * 0.22 + this.chassis.y * 0.42 - punch * 0.1 - land * CAMERA.landDrop,
+      this.player.z - CAMERA.back - speedT * 0.58 - punch * CAMERA.boostPunch,
     );
     this.camPos.x = damp(this.camPos.x, this.desiredCam.x, CAMERA.lag, dt);
     this.camPos.y = damp(this.camPos.y, this.desiredCam.y, CAMERA.follow, dt);
@@ -591,8 +603,8 @@ export class Game {
 
     this.look.set(
       this.player.x * 0.16 + this.chassis.roll * 1.4 + heading.x * CAMERA.lookAhead * CAMERA.yawLook,
-      CAMERA.lookHeight + speedT * 0.06 - land * 0.18,
-      this.player.z + CAMERA.lookAhead + speedT * 2.2 + punch * 1.4,
+      CAMERA.lookHeight + this.chassis.y * 0.55 + speedT * 0.05 - land * 0.1,
+      this.player.z + CAMERA.lookAhead + speedT * 0.8 + punch * 0.55,
     );
     this.lookMat.lookAt(this.camPos, this.look, this.camera.up);
     this.camQuat.setFromRotationMatrix(this.lookMat);
@@ -609,29 +621,33 @@ export class Game {
     const live = this.run.boosting && this.mode === "playing" && !this.save.reducedMotion;
     const trailMat = this.boostTrail.material as THREE.LineBasicMaterial;
     const glowMat = this.boostGlow.material as THREE.MeshBasicMaterial;
-    trailMat.opacity = damp(trailMat.opacity, live ? 0.55 : 0, 10, dt);
-    glowMat.opacity = damp(glowMat.opacity, live ? 0.28 : 0, 9, dt);
-    this.boostLight.intensity = damp(this.boostLight.intensity, live ? 1.35 : 0, 8, dt);
+    trailMat.opacity = damp(trailMat.opacity, live ? 0.34 : 0, 12, dt);
+    glowMat.opacity = damp(glowMat.opacity, live ? 0.16 : 0, 11, dt);
+    this.boostLight.intensity = damp(this.boostLight.intensity, live ? 0.07 : 0, 10, dt);
+    this.boostLight.distance = 2.1;
 
-    this.trailTip.set(this.player.x, 0.32 + this.chassis.y, this.player.z - 1.35);
-    if (this.trailHistory.length === 0 || this.trailHistory[0].distanceToSquared(this.trailTip) > 0.04) {
-      const slot = this.trailHistory.length < 22 ? new THREE.Vector3() : this.trailHistory.pop()!;
+    this.trailTip.set(this.player.x, 0.155 + this.chassis.y, this.player.z - 1.74);
+    const pos = this.boostTrail.geometry.getAttribute("position");
+    const slots = pos.count;
+    if (this.trailHistory.length === 0 || this.trailHistory[0].distanceToSquared(this.trailTip) > 0.01) {
+      const slot = this.trailHistory.length < slots ? new THREE.Vector3() : this.trailHistory.pop()!;
       slot.copy(this.trailTip);
       this.trailHistory.unshift(slot);
     } else {
       this.trailHistory[0].copy(this.trailTip);
     }
-    const pos = this.boostTrail.geometry.getAttribute("position");
-    for (let i = 0; i < pos.count; i++) {
+    const wake = 0.92;
+    for (let i = 0; i < slots; i++) {
       const src = this.trailHistory[Math.min(i, Math.max(0, this.trailHistory.length - 1))] ?? this.trailTip;
-      pos.setXYZ(i, src.x, src.y, src.z);
+      const t = i / Math.max(1, slots - 1);
+      pos.setXYZ(i, src.x, this.trailTip.y - t * 0.02, this.trailTip.z - t * wake);
     }
     pos.needsUpdate = true;
     this.boostTrail.geometry.computeBoundingSphere();
     this.boostTrail.visible = trailMat.opacity > 0.02;
     this.boostGlow.visible = glowMat.opacity > 0.02;
-    this.boostGlow.position.set(this.player.x, 0.36 + this.chassis.y, this.player.z - 2.05);
-    this.boostGlow.scale.set(live ? 0.85 : 0.5, live ? 0.85 : 0.5, 1 + this.boostPunch * 0.55);
+    this.boostGlow.position.set(this.player.x, 0.168 + this.chassis.y, this.player.z - 1.76);
+    this.boostGlow.scale.set(live ? 1.55 : 0.85, live ? 0.1 : 0.06, 0.78 + this.boostPunch * 0.08);
     this.boostLight.position.copy(this.boostGlow.position);
   }
 
@@ -645,6 +661,12 @@ export class Game {
     this.shake = 0;
     this.trailHistory = [];
     this.camPos.set(this.player.x * 0.26, CAMERA.height, this.player.z - CAMERA.back);
+    this.desiredCam.copy(this.camPos);
+    this.look.set(this.player.x * 0.16, CAMERA.lookHeight, this.player.z + CAMERA.lookAhead);
+    this.lookMat.lookAt(this.camPos, this.look, this.camera.up);
+    this.camQuat.setFromRotationMatrix(this.lookMat);
+    this.camera.position.copy(this.camPos);
+    this.camera.quaternion.copy(this.camQuat);
     this.camera.fov = CAMERA.fovIdle;
     this.camera.updateProjectionMatrix();
     (this.boostTrail.material as THREE.LineBasicMaterial).opacity = 0;
@@ -652,35 +674,11 @@ export class Game {
     this.boostLight.intensity = 0;
     this.boostTrail.visible = false;
     this.boostGlow.visible = false;
+    this.speedLines.visible = false;
+    (this.speedLines.material as THREE.PointsMaterial).opacity = 0;
     this.spray.visible = false;
     (this.spray.material as THREE.PointsMaterial).opacity = 0;
-  }
-
-  private setupBloom() {
-    this.disposeBloom();
-    try {
-      const composer = new EffectComposer(this.renderer);
-      composer.addPass(new RenderPass(this.scene, this.camera));
-      const bloom = new UnrealBloomPass(
-        new THREE.Vector2(1, 1),
-        BLOOM.strength,
-        BLOOM.radius,
-        BLOOM.threshold,
-      );
-      composer.addPass(bloom);
-      composer.addPass(new OutputPass());
-      this.composer = composer;
-      this.bloomPass = bloom;
-    } catch {
-      this.disposeBloom();
-    }
-  }
-
-  private disposeBloom() {
-    this.composer?.dispose();
-    this.bloomPass?.dispose();
-    this.composer = null;
-    this.bloomPass = null;
+    this.sprayLife.fill(1);
   }
 
   private acquire(kind: TrafficCar["kind"]) {
@@ -703,28 +701,32 @@ export class Game {
   }
 
   private makeSpeedLines() {
-    const count = 42;
-    const array = new Float32Array(count * 3);
-    const streaks = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      streaks[i * 3] = (Math.random() - 0.5) * 8;
-      streaks[i * 3 + 1] = 0.4 + Math.random() * 2;
-      streaks[i * 3 + 2] = -12 + Math.random() * 40;
+    const dashes = 6;
+    const segs = 2;
+    const array = new Float32Array(dashes * segs * 3);
+    const streaks = new Float32Array(dashes * 3);
+    const marks = [-ROAD.laneWidth, 0, ROAD.laneWidth];
+    for (let i = 0; i < dashes; i++) {
+      streaks[i * 3] = marks[i % marks.length];
+      streaks[i * 3 + 1] = 0.02;
+      streaks[i * 3 + 2] = -1 + i * 3.4;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(array, 3));
     const points = new THREE.Points(
       geo,
       new THREE.PointsMaterial({
-        color: 0xe8eef4,
-        size: 0.055,
+        color: 0x8e959c,
+        size: 0.045,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
       }),
     );
     points.userData.streaks = streaks;
+    points.userData.segs = segs;
+    points.userData.dashLen = 1.15;
     points.visible = false;
     points.frustumCulled = false;
     return points;
@@ -733,37 +735,42 @@ export class Game {
   private updateSpeedLines(dt: number) {
     const live = this.run.boosting && this.mode === "playing" && !this.save.reducedMotion;
     const mat = this.speedLines.material as THREE.PointsMaterial;
-    mat.opacity = damp(mat.opacity, live ? 0.2 : 0, 8, dt);
+    mat.opacity = damp(mat.opacity, live ? 0.12 : 0, 11, dt);
     this.speedLines.visible = mat.opacity > 0.02;
     if (!this.speedLines.visible) return;
     const streaks = this.speedLines.userData.streaks as Float32Array;
+    const segs = Number(this.speedLines.userData.segs) || 2;
+    const dashLen = Number(this.speedLines.userData.dashLen) || 1.15;
     const pos = this.speedLines.geometry.getAttribute("position");
     const vz = this.player.speed / 3.6;
-    for (let i = 0; i < pos.count; i++) {
-      streaks[i * 3 + 2] -= vz * dt * 1.6;
-      if (streaks[i * 3 + 2] < -14) {
-        streaks[i * 3] = (Math.random() - 0.5) * 7;
-        streaks[i * 3 + 1] = 0.35 + Math.random() * 1.8;
-        streaks[i * 3 + 2] = 10 + Math.random() * 18;
+    const marks = [-ROAD.laneWidth, 0, ROAD.laneWidth];
+    const dashes = streaks.length / 3;
+    for (let i = 0; i < dashes; i++) {
+      streaks[i * 3 + 2] -= vz * dt;
+      if (streaks[i * 3 + 2] < -5.2) {
+        streaks[i * 3] = marks[i % marks.length];
+        streaks[i * 3 + 1] = 0.02;
+        streaks[i * 3 + 2] = 14 + (i % 3) * 2.2;
       }
-      pos.setXYZ(
-        i,
-        this.player.x + streaks[i * 3],
-        0.45 + this.chassis.y + streaks[i * 3 + 1],
-        this.player.z + streaks[i * 3 + 2],
-      );
+      const x = streaks[i * 3];
+      const y = streaks[i * 3 + 1];
+      const z0 = this.player.z + streaks[i * 3 + 2];
+      for (let s = 0; s < segs; s++) {
+        pos.setXYZ(i * segs + s, x, y, z0 + s * (dashLen / Math.max(1, segs - 1)));
+      }
     }
     pos.needsUpdate = true;
   }
 
   private makeSpray() {
-    const count = 88;
+    const count = 14;
     this.sprayLife = new Float32Array(count);
     const array = new Float32Array(count * 3);
+    const vel = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      this.sprayLife[i] = Math.random();
+      this.sprayLife[i] = 1;
       array[i * 3] = 0;
-      array[i * 3 + 1] = 0.08;
+      array[i * 3 + 1] = -1;
       array[i * 3 + 2] = 0;
     }
     const geo = new THREE.BufferGeometry();
@@ -771,44 +778,63 @@ export class Game {
     const points = new THREE.Points(
       geo,
       new THREE.PointsMaterial({
-        color: 0xc8ccd0,
-        size: 0.05,
+        color: 0x3a3630,
+        size: 0.02,
         transparent: true,
         opacity: 0,
         depthWrite: false,
+        sizeAttenuation: true,
       }),
     );
+    points.userData.vel = vel;
     points.visible = false;
     points.frustumCulled = false;
     return points;
   }
 
   private updateSpray(dt: number) {
-    const on = this.mode === "playing" && this.player.speed > 88 && !this.save.reducedMotion;
+    let laneOff = Infinity;
+    for (let lane = 0; lane < ROAD.laneCount; lane++) {
+      laneOff = Math.min(laneOff, Math.abs(this.player.x - laneCenter(lane, ROAD.laneWidth, ROAD.laneCount)));
+    }
+    const braking = this.input.brake > 0.12;
+    const offline = laneOff > 0.72;
+    const sliding = Math.abs(this.player.vx) > 4.5;
+    const emit =
+      this.mode === "playing" &&
+      this.player.speed > 52 &&
+      !this.save.reducedMotion &&
+      (braking || offline || sliding);
     const mat = this.spray.material as THREE.PointsMaterial;
-    mat.opacity = damp(mat.opacity, on ? 0.32 : 0, 7, dt);
+    mat.opacity = damp(mat.opacity, emit ? 0.22 : 0, 9, dt);
     this.spray.visible = mat.opacity > 0.02;
     if (!this.spray.visible) return;
     const pos = this.spray.geometry.getAttribute("position");
-    const drift = (this.player.speed / 3.6) * dt;
+    const vel = this.spray.userData.vel as Float32Array;
+    const kick = (braking ? 1.55 : 0.55) + (offline || sliding ? 0.4 : 0);
     for (let i = 0; i < pos.count; i++) {
-      this.sprayLife[i] += dt * (1.6 + this.player.speed / 160);
+      this.sprayLife[i] += dt * (3.4 + this.player.speed / 160);
       if (this.sprayLife[i] >= 1) {
+        if (!emit) {
+          pos.setXYZ(i, this.player.x, -1, this.player.z);
+          continue;
+        }
         this.sprayLife[i] = 0;
-        const side = i % 2 === 0 ? -0.84 : 0.84;
+        const side = i % 2 === 0 ? -0.86 : 0.86;
         pos.setXYZ(
           i,
-          this.player.x + side + (Math.random() - 0.5) * 0.16,
-          0.06 + Math.random() * 0.05,
-          this.player.z - 1.05 - Math.random() * 0.35,
+          this.player.x + side + (Math.random() - 0.5) * 0.04,
+          0.018 + Math.random() * 0.012,
+          this.player.z - 1.2 - Math.random() * 0.06,
         );
+        vel[i * 3] = side * (0.18 + Math.random() * 0.16) + this.player.vx * 0.06;
+        vel[i * 3 + 1] = 0.04 + Math.random() * 0.07;
+        vel[i * 3 + 2] = -kick * (1.05 + Math.random() * 0.55);
       } else {
-        pos.setXYZ(
-          i,
-          pos.getX(i) + (Math.random() - 0.5) * 0.03,
-          pos.getY(i) + dt * 0.42,
-          pos.getZ(i) - drift * 0.35,
-        );
+        vel[i * 3] *= Math.max(0, 1 - 2.4 * dt);
+        vel[i * 3 + 1] -= 7.2 * dt;
+        const y = Math.max(0.012, pos.getY(i) + vel[i * 3 + 1] * dt);
+        pos.setXYZ(i, pos.getX(i) + vel[i * 3] * dt, y, pos.getZ(i) + vel[i * 3 + 2] * dt);
       }
     }
     pos.needsUpdate = true;
@@ -816,15 +842,15 @@ export class Game {
 
   private makeBoostTrail() {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(22 * 3), 3));
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(7 * 3), 3));
     const line = new THREE.Line(
       geo,
       new THREE.LineBasicMaterial({
         color: 0xffe0b8,
         transparent: true,
         opacity: 0,
-        blending: THREE.AdditiveBlending,
         depthWrite: false,
+        fog: true,
       }),
     );
     line.visible = false;
@@ -833,7 +859,7 @@ export class Game {
   }
 
   private makeBoostGlow() {
-    const geo = new THREE.ConeGeometry(0.1, 1.45, 8, 1, true);
+    const geo = new THREE.ConeGeometry(0.16, 0.28, 5, 1, true);
     geo.rotateX(-Math.PI / 2);
     const glow = new THREE.Mesh(
       geo,
@@ -841,10 +867,9 @@ export class Game {
         color: 0xffd8a0,
         transparent: true,
         opacity: 0,
-        blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide,
-        fog: false,
+        fog: true,
       }),
     );
     glow.visible = false;
@@ -872,6 +897,14 @@ export class Game {
     if (this.mode !== "playing" && this.mode !== "countdown" && this.mode !== "paused") return;
     this.ui.speed.textContent = String(Math.round(this.run.speed));
     if (this.ui.gear) this.ui.gear.textContent = this.gearLabel(this.run.speed);
+    if (this.ui.rpm) {
+      const rpm = Math.round(800 + this.run.speed * 18 + (this.run.boosting ? 400 : 0));
+      this.ui.rpm.textContent = `${Math.min(rpm, 7800)} RPM`;
+    }
+    if (this.ui.raceFill) {
+      const pct = clamp(this.run.distance / 4200, 0, 1);
+      this.ui.raceFill.style.width = `${Math.round(pct * 100)}%`;
+    }
     this.ui.distance.textContent = formatDistance(this.run.distance);
     this.ui.score.textContent = formatScore(this.run.score);
     this.ui.combo.textContent = this.run.combo > 0 ? `×${this.run.combo}` : "";
@@ -1198,6 +1231,9 @@ export class Game {
     this.ui.openGarage.addEventListener("click", () => this.openGarage(this.mode === "results" ? "results" : "title"));
     this.ui.openGarageResults?.addEventListener("click", () => this.openGarage("results"));
     this.ui.closeGarage?.addEventListener("click", () => this.closeGarage());
+    this.bindTopTabs();
+    this.bindSubtabs(this.ui.title);
+    this.bindSubtabs(this.ui.garage);
     this.ui.cars.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-car]");
       if (!button || button.disabled) return;
@@ -1477,9 +1513,17 @@ export class Game {
     this.setVisible("garage", id === "garage");
     this.setVisible("results", id === "results");
     this.setVisible("settings", id === "settings");
-    this.ui.navHome.classList.toggle("is-active", id === "title");
-    this.ui.openGarage.classList.toggle("is-active", id === "garage");
-    this.ui.openSettings.classList.toggle("is-active", id === "settings");
+    const topTabs: [HTMLElement, boolean][] = [
+      [this.ui.navHome, id === "title"],
+      [this.ui.openGarage, id === "garage"],
+      [this.ui.openSettings, id === "settings"],
+    ];
+    topTabs.forEach(([el, on]) => {
+      el.classList.toggle("is-active", on);
+      el.setAttribute("aria-selected", String(on));
+      el.tabIndex = on ? 0 : -1;
+    });
+    if (id === "results") this.ui.navHome.tabIndex = 0;
     const dist = this.mode === "results" ? this.run.distance : 0;
     if (this.ui.stageLabel) this.ui.stageLabel.textContent = zoneAt(dist, this.world.circuit).name;
     if (this.ui.stageMode) {
@@ -1498,6 +1542,70 @@ export class Game {
     this.ui[id]?.classList.toggle("hidden", !visible);
   }
 
+  private bindTopTabs() {
+    const list = this.ui.navHome.parentElement;
+    if (!list) return;
+    const tabs = [this.ui.navHome, this.ui.openGarage, this.ui.openSettings];
+    list.addEventListener("keydown", (event) => {
+      const key = event.key;
+      if (key !== "ArrowRight" && key !== "ArrowLeft" && key !== "Home" && key !== "End") return;
+      const current = tabs.indexOf(event.target as HTMLElement);
+      if (current < 0) return;
+      event.preventDefault();
+      const next =
+        key === "Home"
+          ? 0
+          : key === "End"
+            ? tabs.length - 1
+            : (current + (key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+      tabs[next].focus();
+      tabs[next].click();
+    });
+  }
+
+  private bindSubtabs(root: HTMLElement) {
+    const list = root.querySelector<HTMLElement>(":scope > .subtabs");
+    if (!list) return;
+    const tabs = [...list.querySelectorAll<HTMLButtonElement>("[role='tab']")];
+    const panes = [...root.querySelectorAll<HTMLElement>(":scope > .tab-pane")];
+    const activate = (id: string) => {
+      tabs.forEach((tab) => {
+        const on = tab.dataset.subtab === id;
+        tab.classList.toggle("is-active", on);
+        tab.setAttribute("aria-selected", String(on));
+        tab.tabIndex = on ? 0 : -1;
+      });
+      panes.forEach((pane) => {
+        const show = pane.dataset.pane === id;
+        pane.classList.toggle("is-active", show);
+        pane.hidden = !show;
+      });
+    };
+    list.addEventListener("click", (event) => {
+      const tab = (event.target as HTMLElement).closest<HTMLButtonElement>("[role='tab']");
+      if (!tab?.dataset.subtab || !list.contains(tab)) return;
+      activate(tab.dataset.subtab);
+    });
+    list.addEventListener("keydown", (event) => {
+      const key = event.key;
+      if (key !== "ArrowRight" && key !== "ArrowLeft" && key !== "Home" && key !== "End") return;
+      const current = tabs.indexOf(event.target as HTMLButtonElement);
+      if (current < 0) return;
+      event.preventDefault();
+      const next =
+        key === "Home"
+          ? 0
+          : key === "End"
+            ? tabs.length - 1
+            : (current + (key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+      const tab = tabs[next];
+      const id = tab.dataset.subtab;
+      if (!id) return;
+      tab.focus();
+      activate(id);
+    });
+  }
+
   private touchy() {
     return matchMedia("(pointer: coarse)").matches;
   }
@@ -1509,8 +1617,6 @@ export class Game {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
-    this.composer?.setSize(w, h);
-    this.bloomPass?.setSize(w, h);
   };
 
   private onVisibility = () => {

@@ -140,21 +140,21 @@ export const SCORE = {
 } as const;
 
 export const CAMERA = {
-  height: 2.45,
-  back: 8.2,
-  lookAhead: 14,
-  follow: 9,
-  fovIdle: 58,
-  fovFast: 68,
-  fovBoostExtra: 3,
-  shakeMax: 0.006,
-  lag: 5.2,
+  height: 2.42,
+  back: 6.7,
+  lookAhead: 8.4,
+  follow: 10.4,
+  fovIdle: 51,
+  fovFast: 56,
+  fovBoostExtra: 1.5,
+  shakeMax: 0.0038,
+  lag: 6,
   yawLook: 0.7,
-  yawCam: 0.32,
-  steerRoll: 0.0007,
-  boostPunch: 1.28,
-  landDrop: 0.2,
-  lookHeight: 0.62,
+  yawCam: 0.28,
+  steerRoll: 0.00055,
+  boostPunch: 0.5,
+  landDrop: 0.12,
+  lookHeight: 0.96,
   far: 920,
 } as const;
 
@@ -171,10 +171,10 @@ export const CHASSIS = {
 } as const;
 
 export const BLOOM = {
-  strength: 0.16,
-  radius: 0.38,
-  threshold: 0.94,
-  exposure: 0.92,
+  strength: 0.045,
+  radius: 0.26,
+  threshold: 0.95,
+  exposure: 1.04,
 } as const;
 
 export const CREDIT = {
