@@ -23,7 +23,7 @@ export const ROAD = {
     return this.halfWidth - 0.95;
   },
   segmentLength: 48,
-  segmentCount: 18,
+  segmentCount: 26,
 } as const;
 
 export const CARS = [
@@ -69,6 +69,34 @@ export const CARS = [
     color: 0xff006e,
     accent: 0x00e5ff,
   },
+  {
+    id: "volt",
+    name: "Volt",
+    blurb: "Gold-stripe all-rounder. Unlocks late.",
+    unlockBest: 3200,
+    unlockCost: 2800,
+    topSpeed: 262,
+    accel: 40,
+    brake: 80,
+    steer: 24,
+    grip: 15,
+    color: 0xffd600,
+    accent: 0x00e5ff,
+  },
+  {
+    id: "nyx",
+    name: "Nyx",
+    blurb: "Heavy brakes. Holds a lane when the night gets loud.",
+    unlockBest: 4500,
+    unlockCost: 3400,
+    topSpeed: 236,
+    accel: 44,
+    brake: 92,
+    steer: 26,
+    grip: 20,
+    color: 0x7a5cff,
+    accent: 0xff2bd6,
+  },
 ] as const;
 
 export type CarId = (typeof CARS)[number]["id"];
@@ -94,10 +122,11 @@ export const DRIVE = {
 } as const;
 
 export const SPAWN = {
-  minLookahead: 110,
-  lookaheadSeconds: 1.45,
+  /** Spawn far enough that packs read as highway traffic instead of popping in. */
+  minLookahead: 148,
+  lookaheadSeconds: 1.82,
   despawnBehind: 28,
-  introSafeDistance: 38,
+  introSafeDistance: 52,
   minGapLanes: 1,
 } as const;
 
@@ -112,22 +141,22 @@ export const SCORE = {
 } as const;
 
 export const CAMERA = {
-  height: 2.45,
-  back: 8.2,
-  lookAhead: 14,
-  follow: 9,
-  fovIdle: 58,
-  fovFast: 68,
-  fovBoostExtra: 3,
-  shakeMax: 0.006,
-  lag: 5.2,
+  height: 2.42,
+  back: 6.7,
+  lookAhead: 8.4,
+  follow: 10.4,
+  fovIdle: 51,
+  fovFast: 56,
+  fovBoostExtra: 1.5,
+  shakeMax: 0.0038,
+  lag: 6,
   yawLook: 0.7,
-  yawCam: 0.32,
-  steerRoll: 0.0007,
-  boostPunch: 1.28,
-  landDrop: 0.2,
-  lookHeight: 0.62,
-  far: 920,
+  yawCam: 0.28,
+  steerRoll: 0.00055,
+  boostPunch: 0.5,
+  landDrop: 0.12,
+  lookHeight: 0.96,
+  far: 980,
 } as const;
 
 export const CHASSIS = {
@@ -143,10 +172,10 @@ export const CHASSIS = {
 } as const;
 
 export const BLOOM = {
-  strength: 0.16,
-  radius: 0.38,
-  threshold: 0.94,
-  exposure: 0.92,
+  strength: 0.045,
+  radius: 0.26,
+  threshold: 0.95,
+  exposure: 1.04,
 } as const;
 
 export const CREDIT = {
