@@ -29,6 +29,7 @@ export type Pattern = {
 
 const L = ROAD.laneCount;
 
+/** Highway GT packs: rolling groups, one driveable thread, never a 3-wide arcade wall. */
 export const PATTERNS: Pattern[] = [
   {
     name: "single",
@@ -39,26 +40,26 @@ export const PATTERNS: Pattern[] = [
     name: "offset-pair",
     minDistance: 0,
     cars: [
-      { lane: 0, zOffset: 0, speedOffset: -4, kind: "support" },
-      { lane: 2, zOffset: 18, speedOffset: 2, kind: "gt" },
+      { lane: 0, zOffset: 0, speedOffset: -3, kind: "support" },
+      { lane: 2, zOffset: 20, speedOffset: 2, kind: "gt" },
     ],
   },
   {
     name: "leave-right",
     minDistance: 80,
     cars: [
-      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 1, zOffset: 8, speedOffset: -6, kind: "support" },
-      { lane: 2, zOffset: 4, speedOffset: 4, kind: "gt" },
+      { lane: 0, zOffset: 0, speedOffset: -1, kind: "gt" },
+      { lane: 1, zOffset: 14, speedOffset: -4, kind: "support" },
+      { lane: 2, zOffset: 30, speedOffset: 1, kind: "gt" },
     ],
   },
   {
     name: "pinch",
     minDistance: 100,
     cars: [
-      { lane: 0, zOffset: 0, speedOffset: -3, kind: "gt" },
-      { lane: 2, zOffset: 3, speedOffset: 2, kind: "support" },
-      { lane: 3, zOffset: 5, speedOffset: -1, kind: "gt" },
+      { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
+      { lane: 2, zOffset: 18, speedOffset: 2, kind: "support" },
+      { lane: 3, zOffset: 34, speedOffset: -1, kind: "gt" },
     ],
   },
   {
@@ -66,8 +67,8 @@ export const PATTERNS: Pattern[] = [
     minDistance: 160,
     cars: [
       { lane: 1, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 2, zOffset: 10, speedOffset: -8, kind: "support" },
-      { lane: 3, zOffset: 6, speedOffset: 3, kind: "gt" },
+      { lane: 2, zOffset: 14, speedOffset: -4, kind: "support" },
+      { lane: 3, zOffset: 30, speedOffset: 2, kind: "gt" },
     ],
   },
   {
@@ -75,9 +76,9 @@ export const PATTERNS: Pattern[] = [
     minDistance: 250,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: 2, kind: "gt" },
-      { lane: 1, zOffset: 6, speedOffset: -4, kind: "support" },
-      { lane: 0, zOffset: 28, speedOffset: 4, kind: "gt" },
-      { lane: 3, zOffset: 32, speedOffset: -2, kind: "safety" },
+      { lane: 1, zOffset: 16, speedOffset: -2, kind: "support" },
+      { lane: 0, zOffset: 36, speedOffset: 3, kind: "gt" },
+      { lane: 3, zOffset: 44, speedOffset: -3, kind: "safety" },
     ],
   },
   {
@@ -85,18 +86,18 @@ export const PATTERNS: Pattern[] = [
     minDistance: 420,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
-      { lane: 2, zOffset: 10, speedOffset: 6, kind: "support" },
-      { lane: 1, zOffset: 26, speedOffset: -10, kind: "gt" },
-      { lane: 3, zOffset: 36, speedOffset: 2, kind: "safety" },
+      { lane: 2, zOffset: 16, speedOffset: 3, kind: "support" },
+      { lane: 1, zOffset: 34, speedOffset: -4, kind: "gt" },
+      { lane: 3, zOffset: 50, speedOffset: 2, kind: "safety" },
     ],
   },
   {
     name: "wall-with-slot",
     minDistance: 550,
     cars: [
-      { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 1, zOffset: 2, speedOffset: 0, kind: "support" },
-      { lane: 3, zOffset: 3, speedOffset: -2, kind: "gt" },
+      { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
+      { lane: 1, zOffset: 10, speedOffset: -3, kind: "support" },
+      { lane: 3, zOffset: 28, speedOffset: 2, kind: "gt" },
     ],
   },
   {
@@ -104,16 +105,16 @@ export const PATTERNS: Pattern[] = [
     minDistance: 700,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 1, zOffset: 6, speedOffset: -4, kind: "gt" },
-      { lane: 3, zOffset: 4, speedOffset: 5, kind: "support" },
+      { lane: 1, zOffset: 10, speedOffset: -3, kind: "gt" },
+      { lane: 3, zOffset: 26, speedOffset: 3, kind: "support" },
     ],
   },
   {
     name: "weaver",
     minDistance: 800,
     cars: [
-      { lane: 1, zOffset: 0, speedOffset: 8, kind: "safety", weave: 0.85 },
-      { lane: 3, zOffset: 22, speedOffset: -6, kind: "gt" },
+      { lane: 1, zOffset: 0, speedOffset: 5, kind: "safety", weave: 0.7 },
+      { lane: 3, zOffset: 28, speedOffset: -4, kind: "gt" },
     ],
   },
   {
@@ -121,9 +122,19 @@ export const PATTERNS: Pattern[] = [
     minDistance: 950,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
-      { lane: 3, zOffset: 5, speedOffset: 3, kind: "support" },
-      { lane: 1, zOffset: 26, speedOffset: -6, kind: "gt" },
-      { lane: 3, zOffset: 38, speedOffset: 4, kind: "safety" },
+      { lane: 3, zOffset: 12, speedOffset: 2, kind: "support" },
+      { lane: 1, zOffset: 32, speedOffset: -3, kind: "gt" },
+      { lane: 3, zOffset: 50, speedOffset: 3, kind: "safety" },
+    ],
+  },
+  {
+    name: "slow-right",
+    minDistance: 1100,
+    cars: [
+      { lane: 3, zOffset: 0, speedOffset: -14, kind: "support" },
+      { lane: 3, zOffset: 24, speedOffset: -12, kind: "gt" },
+      { lane: 0, zOffset: 16, speedOffset: 3, kind: "gt" },
+      { lane: 1, zOffset: 42, speedOffset: 1, kind: "safety" },
     ],
   },
   {
@@ -131,9 +142,9 @@ export const PATTERNS: Pattern[] = [
     minDistance: 1400,
     cars: [
       { lane: 3, zOffset: 0, speedOffset: 2, kind: "gt" },
-      { lane: 2, zOffset: 16, speedOffset: -5, kind: "support" },
-      { lane: 0, zOffset: 22, speedOffset: 4, kind: "gt" },
-      { lane: 3, zOffset: 40, speedOffset: -3, kind: "safety", weave: 0.7 },
+      { lane: 2, zOffset: 20, speedOffset: -3, kind: "support" },
+      { lane: 0, zOffset: 38, speedOffset: 3, kind: "gt" },
+      { lane: 3, zOffset: 56, speedOffset: -2, kind: "safety", weave: 0.65 },
     ],
   },
   {
@@ -141,19 +152,19 @@ export const PATTERNS: Pattern[] = [
     minDistance: 1900,
     cars: [
       { lane: 0, zOffset: 0, speedOffset: 0, kind: "gt" },
-      { lane: 1, zOffset: 14, speedOffset: -8, kind: "support" },
-      { lane: 2, zOffset: 28, speedOffset: 6, kind: "gt" },
-      { lane: 0, zOffset: 44, speedOffset: -4, kind: "gt", weave: 0.75 },
+      { lane: 1, zOffset: 18, speedOffset: -4, kind: "support" },
+      { lane: 2, zOffset: 36, speedOffset: 3, kind: "gt" },
+      { lane: 0, zOffset: 54, speedOffset: -2, kind: "gt", weave: 0.7 },
     ],
   },
   {
     name: "double-stagger",
     minDistance: 2400,
     cars: [
-      { lane: 0, zOffset: 0, speedOffset: 4, kind: "gt", weave: 0.8 },
-      { lane: 2, zOffset: 12, speedOffset: -8, kind: "support" },
-      { lane: 1, zOffset: 28, speedOffset: 10, kind: "gt" },
-      { lane: 3, zOffset: 40, speedOffset: -4, kind: "safety", weave: 0.9 },
+      { lane: 0, zOffset: 0, speedOffset: 3, kind: "gt", weave: 0.7 },
+      { lane: 2, zOffset: 18, speedOffset: -4, kind: "support" },
+      { lane: 1, zOffset: 36, speedOffset: 4, kind: "gt" },
+      { lane: 3, zOffset: 54, speedOffset: -3, kind: "safety", weave: 0.75 },
     ],
   },
   {
@@ -161,20 +172,30 @@ export const PATTERNS: Pattern[] = [
     minDistance: 2600,
     cars: [
       { lane: 1, zOffset: 0, speedOffset: 2, kind: "gt" },
-      { lane: 2, zOffset: 3, speedOffset: 0, kind: "support" },
-      { lane: 3, zOffset: 8, speedOffset: -2, kind: "gt" },
-      { lane: 0, zOffset: 34, speedOffset: 8, kind: "safety", weave: 0.85 },
+      { lane: 2, zOffset: 18, speedOffset: 0, kind: "support" },
+      { lane: 3, zOffset: 36, speedOffset: -2, kind: "gt" },
+      { lane: 0, zOffset: 54, speedOffset: 5, kind: "safety", weave: 0.75 },
+    ],
+  },
+  {
+    name: "convoy",
+    minDistance: 3000,
+    cars: [
+      { lane: 1, zOffset: 0, speedOffset: -8, kind: "gt" },
+      { lane: 1, zOffset: 18, speedOffset: -7, kind: "gt" },
+      { lane: 1, zOffset: 36, speedOffset: -6, kind: "support" },
+      { lane: 3, zOffset: 24, speedOffset: 2, kind: "safety" },
     ],
   },
   {
     name: "apex-gate",
     minDistance: 3400,
     cars: [
-      { lane: 0, zOffset: 0, speedOffset: -3, kind: "gt" },
-      { lane: 1, zOffset: 6, speedOffset: 2, kind: "support" },
-      { lane: 3, zOffset: 4, speedOffset: 1, kind: "gt" },
-      { lane: 2, zOffset: 26, speedOffset: -8, kind: "safety", weave: 0.8 },
-      { lane: 0, zOffset: 42, speedOffset: 6, kind: "gt" },
+      { lane: 0, zOffset: 0, speedOffset: -2, kind: "gt" },
+      { lane: 1, zOffset: 16, speedOffset: 1, kind: "support" },
+      { lane: 3, zOffset: 8, speedOffset: 2, kind: "gt" },
+      { lane: 2, zOffset: 38, speedOffset: -5, kind: "safety", weave: 0.7 },
+      { lane: 0, zOffset: 56, speedOffset: 3, kind: "gt" },
     ],
   },
 ];
