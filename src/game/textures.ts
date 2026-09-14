@@ -89,7 +89,7 @@ export function makeKerbTexture() {
   return tex;
 }
 
-export function makeBarrierTexture() {
+export function makeBarrierTexture(label = "HARBOR GP") {
   const { el, ctx } = canvas(128, 512);
   ctx.fillStyle = "#5e6774";
   ctx.fillRect(0, 0, 128, 512);
@@ -113,7 +113,7 @@ export function makeBarrierTexture() {
   ctx.fillStyle = "rgba(18, 22, 28, 0.55)";
   ctx.font = "700 22px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("HARBOR GP", 0, 8);
+  ctx.fillText(label, 0, 8);
   ctx.restore();
   return toTexture(el, 2);
 }
@@ -253,7 +253,12 @@ export function makeGravelTexture() {
   return toTexture(el, 4);
 }
 
-export function makeBillboardTexture(title: string, color: string, kicker = "MIDNIGHT VOLTAGE  ·  NIGHT CIRCUIT") {
+export function makeBillboardTexture(
+  title: string,
+  color: string,
+  kicker = "MIDNIGHT VOLTAGE  ·  NIGHT CIRCUIT",
+  footer = "HARBOR GP  ·  VOLTAGE CIRCUIT  ·  MIDNIGHT CUP",
+) {
   const { el, ctx } = canvas(512, 256);
   ctx.fillStyle = "#070a0e";
   ctx.fillRect(0, 0, 512, 256);
@@ -274,14 +279,14 @@ export function makeBillboardTexture(title: string, color: string, kicker = "MID
   ctx.fillText(kicker, 256, 168);
   ctx.fillStyle = "#9aa8b4";
   ctx.font = "500 13px sans-serif";
-  ctx.fillText("HARBOR GP  ·  VOLTAGE CIRCUIT  ·  MIDNIGHT CUP", 256, 208);
+  ctx.fillText(footer, 256, 208);
   const tex = new THREE.CanvasTexture(el);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
 }
 
-export function makeGantrySign(label: string) {
+export function makeGantrySign(label: string, sub = "HARBOR GP  ·  MIDNIGHT CUP") {
   const { el, ctx } = canvas(384, 112);
   ctx.fillStyle = "#16382a";
   ctx.fillRect(0, 0, 384, 112);
@@ -296,14 +301,14 @@ export function makeGantrySign(label: string) {
   ctx.fillText(label, 198, 58);
   ctx.fillStyle = "#9ec9b0";
   ctx.font = "600 12px sans-serif";
-  ctx.fillText("HARBOR GP  ·  MIDNIGHT CUP", 198, 86);
+  ctx.fillText(sub, 198, 86);
   const tex = new THREE.CanvasTexture(el);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
 }
 
-export function makeDistanceBoard(meters: string) {
+export function makeDistanceBoard(meters: string, sub = "HARBOR GP") {
   const { el, ctx } = canvas(256, 192);
   ctx.fillStyle = "#f2f0ea";
   ctx.fillRect(0, 0, 256, 192);
@@ -317,14 +322,14 @@ export function makeDistanceBoard(meters: string) {
   ctx.textAlign = "center";
   ctx.fillText(meters, 128, 118);
   ctx.font = "700 16px sans-serif";
-  ctx.fillText("HARBOR GP", 128, 158);
+  ctx.fillText(sub, 128, 158);
   const tex = new THREE.CanvasTexture(el);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
 }
 
-export function makeMarshalBoard(mode: "clear" | "hold") {
+export function makeMarshalBoard(mode: "clear" | "hold", sub = "VOLTAGE CIRCUIT") {
   const { el, ctx } = canvas(192, 160);
   const fill = mode === "clear" ? "#1f8a4c" : "#c48a12";
   ctx.fillStyle = fill;
@@ -337,7 +342,7 @@ export function makeMarshalBoard(mode: "clear" | "hold") {
   ctx.textAlign = "center";
   ctx.fillText(mode === "clear" ? "CLEAR" : "HOLD", 96, 78);
   ctx.font = "600 13px sans-serif";
-  ctx.fillText("VOLTAGE CIRCUIT", 96, 112);
+  ctx.fillText(sub, 96, 112);
   const tex = new THREE.CanvasTexture(el);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;

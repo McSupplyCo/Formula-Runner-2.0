@@ -18,7 +18,7 @@
       <aside id="shell" class="rail">
         <div class="rail-head">
           <header class="brand">
-            <span>Voltage Circuit</span>
+            <span id="brandCircuit">Voltage Circuit</span>
             <strong>Formula Runner</strong>
           </header>
           <nav class="nav" aria-label="Main">
@@ -36,7 +36,11 @@
         <div class="rail-body">
         <section id="title" class="panel">
           <p class="kicker">Lights out</p>
-          <p class="lede">Pick a car. Thread the night. Cash the near miss.</p>
+          <p class="lede">Pick a circuit. Pick a car. Thread the night.</p>
+          <p class="section-label">Circuit</p>
+          <div id="worlds" class="worlds"></div>
+          <p id="gridHint" class="hint"></p>
+          <p class="section-label">Grid</p>
           <div id="cars" class="cars"></div>
           <div class="panel-foot">
             <button id="play" class="primary" type="button">Lights out</button>
@@ -58,6 +62,8 @@
             </div>
             <p id="garageCredits" class="wallet">0 CR</p>
           </header>
+          <p class="section-label">Circuit</p>
+          <div id="garageWorlds" class="worlds"></div>
           <p class="section-label">Chassis</p>
           <div id="garageCars" class="cars"></div>
           <div id="garageSpecs" class="spec-grid" aria-live="polite"></div>
@@ -69,8 +75,14 @@
             <label>Body <input id="paintPrimary" type="color" value="#00e5ff" /></label>
             <label>Shade <input id="paintSecondary" type="color" value="#0a1628" /></label>
             <label>Stripe <input id="paintAccent" type="color" value="#ff006e" /></label>
-            <p class="help">Tires stay rubber.</p>
+            <label>No. <input id="carNumber" type="number" min="0" max="99" value="1" /></label>
           </div>
+          <p class="section-label">Trail</p>
+          <div id="garageTrails" class="liveries"></div>
+          <p class="section-label">Rims</p>
+          <div id="garageRims" class="liveries"></div>
+          <p class="section-label">Glow</p>
+          <div id="garageGlows" class="liveries"></div>
           <p id="garageHint" class="hint">Race nights pay for spec.</p>
           <button id="closeGarage" class="ghost" type="button">Back to grid</button>
         </section>
@@ -104,6 +116,16 @@
               <button type="button" data-side="right">Right</button>
             </div>
           </div>
+          <div class="setting">
+            <span>HUD</span>
+            <div id="hudSkin" class="seg" role="group" aria-label="HUD skin">
+              <button type="button" data-skin="classic">Classic</button>
+              <button type="button" data-skin="broadcast">Live</button>
+              <button type="button" data-skin="ghost">Ghost</button>
+              <button type="button" data-skin="voltage">Volt</button>
+              <button type="button" data-skin="timing">Split</button>
+            </div>
+          </div>
           <label class="setting check"><span>Calm motion</span><input id="motion" type="checkbox" /></label>
           <label class="setting check"><span>Haptics</span><input id="haptics" type="checkbox" /></label>
           <button id="closeSettings" class="ghost" type="button">Done</button>
@@ -118,6 +140,7 @@
         </div>
         <div id="viewport" class="viewport">
         <canvas id="view"></canvas>
+        <div id="toast" class="toast" aria-live="assertive"></div>
         <section id="hud" class="hud hidden" data-speed="left">
           <div class="hud-left cluster">
             <div class="speed"><span id="speed">0</span><small>KPH</small></div>
@@ -131,7 +154,6 @@
             <button id="pauseHud" class="text-btn hud-pause" type="button">Hold</button>
           </div>
           <div id="combo" class="combo" aria-live="polite"></div>
-          <div id="toast" class="toast" aria-live="assertive"></div>
         </section>
         <div id="countdown" class="countdown hidden">3</div>
         <section id="pause" class="stage-modal hidden">
@@ -150,7 +172,7 @@
       </main>
       <div id="interstitial" class="ad-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adStatus">
         <div class="ad-card">
-          <p class="kicker">Voltage Circuit</p>
+          <p class="kicker" id="adCircuit">Voltage Circuit</p>
           <h2>Hold</h2>
           <p id="adStatus">Stand by…</p>
           <div class="ad-bar" aria-hidden="true"><span id="adBar"></span></div>
