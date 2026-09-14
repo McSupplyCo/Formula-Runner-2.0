@@ -208,8 +208,8 @@ export class Game {
     this.shake = 0;
     this.lastBest = false;
     this.applyCar(this.save.selectedCar);
-    this.resetFeel();
     this.mode = "countdown";
+    this.resetFeel();
     this.audio.startEngine();
     this.setVisible("title", false);
     this.setVisible("results", false);
@@ -271,6 +271,8 @@ export class Game {
       const n = Math.min(3, Math.max(1, Math.ceil(this.countdown)));
       this.ui.countdown.textContent = this.countdown > 0.28 ? String(n) : "GO";
       this.setVisible("countdown", true);
+      this.fovKick = 0;
+      this.boostPunch = 0;
       if (this.countdown <= 0) {
         this.mode = "playing";
         this.setVisible("countdown", false);
@@ -570,17 +572,23 @@ export class Game {
 
   private updateCamera(dt: number) {
     const reduced = this.save.reducedMotion;
-    const speedT = clamp(this.player.speed / 260, 0, 1);
-    const punchHold = this.run.boosting && !reduced ? 0.38 : 0;
-    this.boostPunch = damp(this.boostPunch, punchHold, 7.5, dt);
-    this.fovKick = Math.max(0, this.fovKick - dt * 14);
+    const gridHold = this.mode === "title" || this.mode === "countdown";
+    const poseSpeed = this.mode === "title" ? DRIVE.startSpeed : this.player.speed;
+    const speedT = clamp(poseSpeed / 260, 0, 1);
+    const liveFeel = !gridHold && !reduced;
+    const punchHold = liveFeel && this.run.boosting ? 0.38 : 0;
+    this.boostPunch = gridHold ? 0 : damp(this.boostPunch, punchHold, 7.5, dt);
+    this.fovKick = liveFeel ? Math.max(0, this.fovKick - dt * 14) : 0;
     this.land = Math.max(0, this.land - dt * 3.6);
-    const punch = reduced ? 0 : this.boostPunch;
-    const land = reduced ? 0 : this.land;
-    const extra = this.run.boosting && !reduced ? CAMERA.fovBoostExtra : 0;
-    const targetFov =
-      CAMERA.fovIdle + (CAMERA.fovFast - CAMERA.fovIdle) * speedT + extra + (reduced ? 0 : this.fovKick);
-    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 5.4, dt);
+    const punch = liveFeel ? this.boostPunch : 0;
+    const land = reduced || gridHold ? 0 : this.land;
+    const extra = liveFeel && this.run.boosting ? CAMERA.fovBoostExtra : 0;
+    const targetFov = gridHold
+      ? CAMERA.fovIdle
+      : CAMERA.fovIdle + (CAMERA.fovFast - CAMERA.fovIdle) * speedT + extra + (reduced ? 0 : this.fovKick);
+    this.camera.fov = gridHold
+      ? CAMERA.fovIdle
+      : THREE.MathUtils.damp(this.camera.fov, targetFov, 5.4, dt);
     this.camera.updateProjectionMatrix();
 
     const heading = headingOffset(this.player.yaw, 1);
@@ -589,11 +597,15 @@ export class Game {
       CAMERA.height + speedT * 0.22 + this.chassis.y * 0.42 - punch * 0.1 - land * CAMERA.landDrop,
       this.player.z - CAMERA.back - speedT * 0.58 - punch * CAMERA.boostPunch,
     );
-    this.camPos.x = damp(this.camPos.x, this.desiredCam.x, CAMERA.lag, dt);
-    this.camPos.y = damp(this.camPos.y, this.desiredCam.y, CAMERA.follow, dt);
-    this.camPos.z = damp(this.camPos.z, this.desiredCam.z, CAMERA.follow * 1.2, dt);
+    if (gridHold) {
+      this.camPos.copy(this.desiredCam);
+    } else {
+      this.camPos.x = damp(this.camPos.x, this.desiredCam.x, CAMERA.lag, dt);
+      this.camPos.y = damp(this.camPos.y, this.desiredCam.y, CAMERA.follow, dt);
+      this.camPos.z = damp(this.camPos.z, this.desiredCam.z, CAMERA.follow * 1.2, dt);
+    }
 
-    if (!reduced && this.shake > 0) {
+    if (liveFeel && this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.4);
       const t = this.clock.elapsedTime;
       const hit = this.shake * CAMERA.shakeMax * 4;
@@ -608,10 +620,10 @@ export class Game {
     );
     this.lookMat.lookAt(this.camPos, this.look, this.camera.up);
     this.camQuat.setFromRotationMatrix(this.lookMat);
-    const rollTarget = reduced
+    const rollTarget = reduced || gridHold
       ? 0
       : clamp(this.chassis.roll + this.player.vx * CAMERA.steerRoll, -CHASSIS.rollMax, CHASSIS.rollMax);
-    this.camRoll = damp(this.camRoll, rollTarget, 10, dt);
+    this.camRoll = gridHold ? 0 : damp(this.camRoll, rollTarget, 10, dt);
     this.camera.position.copy(this.camPos);
     this.camera.quaternion.copy(this.camQuat);
     this.camera.rotateZ(this.camRoll);
@@ -660,9 +672,18 @@ export class Game {
     this.prevSpeed = this.player.speed;
     this.shake = 0;
     this.trailHistory = [];
-    this.camPos.set(this.player.x * 0.26, CAMERA.height, this.player.z - CAMERA.back);
+    const speedT = clamp(DRIVE.startSpeed / 260, 0, 1);
+    this.camPos.set(
+      this.player.x * 0.26,
+      CAMERA.height + speedT * 0.22,
+      this.player.z - CAMERA.back - speedT * 0.58,
+    );
     this.desiredCam.copy(this.camPos);
-    this.look.set(this.player.x * 0.16, CAMERA.lookHeight, this.player.z + CAMERA.lookAhead);
+    this.look.set(
+      this.player.x * 0.16,
+      CAMERA.lookHeight + speedT * 0.05,
+      this.player.z + CAMERA.lookAhead + speedT * 0.8,
+    );
     this.lookMat.lookAt(this.camPos, this.look, this.camera.up);
     this.camQuat.setFromRotationMatrix(this.lookMat);
     this.camera.position.copy(this.camPos);

@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { clamp } from "./math";
 import { ROAD } from "./tuning";
 import { WORLDS, zoneInWorld } from "./circuits";
 import type { CityStyle, WeatherKind, WorldDef, Zone } from "./circuits";
@@ -30,12 +29,8 @@ export function zoneAt(distance: number, world: WorldDef = WORLDS[0]): Zone {
   return zoneInWorld(distance, world);
 }
 
-export const CITY_SPAN = 720;
+export const CITY_SPAN = 1320;
 export const CITY_BEHIND = 90;
-/** Ahead of this, recycled skyline / signs are scaled to 0 so they don't pop on-camera. */
-export const HORIZON_APPEAR = 610;
-/** Fully sized once closer than this. */
-export const HORIZON_SOLID = 390;
 
 /** Keep a building in the sliding window ahead of the player. Never wrap backwards. */
 export function recycleCityZ(z: number, playerZ: number, span = CITY_SPAN, behind = CITY_BEHIND): number {
@@ -43,15 +38,6 @@ export function recycleCityZ(z: number, playerZ: number, span = CITY_SPAN, behin
   const floor = playerZ - behind;
   while (next < floor) next += span;
   return next;
-}
-
-/** 0 at the recycle horizon and just behind the camera, 1 in the readable band. */
-export function horizonReveal(ahead: number, appear = HORIZON_APPEAR, solid = HORIZON_SOLID): number {
-  if (ahead <= -20) return 0;
-  if (ahead < 14) return clamp((ahead + 20) / 34, 0, 1);
-  if (ahead >= appear) return 0;
-  if (ahead > solid) return clamp((appear - ahead) / Math.max(1, appear - solid), 0, 1);
-  return 1;
 }
 
 const DIST_LABELS = ["50", "100", "200"];
@@ -424,8 +410,11 @@ export class TrackWorld {
   }
 
   update(playerZ: number, distance: number) {
+    const now = performance.now();
+    const dt = this.lastTime === 0 ? 0 : Math.min(0.05, (now - this.lastTime) / 1000);
+    this.lastTime = now;
     const zone = zoneInWorld(distance, this.circuit);
-    this.applyZone(zone);
+    this.applyZone(zone, dt);
 
     const start = Math.floor((playerZ - ROAD.segmentLength) / ROAD.segmentLength);
     for (let i = 0; i < this.segments.length; i++) {
@@ -442,33 +431,17 @@ export class TrackWorld {
 
     for (const slot of this.citySlots) {
       slot.z = recycleCityZ(slot.z, playerZ);
-      const reveal = horizonReveal(slot.z - playerZ);
       this.cityDummy.position.set(slot.x, slot.y, slot.z);
-      this.cityDummy.scale.set(slot.sx * reveal, slot.sy * reveal, slot.sz * reveal);
+      this.cityDummy.scale.set(slot.sx, slot.sy, slot.sz);
       this.cityDummy.rotation.set(0, slot.yaw, 0);
       this.cityDummy.updateMatrix();
       slot.mesh.setMatrixAt(slot.index, this.cityDummy.matrix);
     }
     for (const layer of this.cityLayers) {
       layer.instanceMatrix.needsUpdate = true;
-      layer.computeBoundingSphere();
     }
-    this.fadeHorizonProps(playerZ);
     this.placeStreetLights(playerZ);
     this.updateWeather(playerZ, zone.weather ?? "clear");
-  }
-
-  private fadeHorizonProps(playerZ: number) {
-    for (const segment of this.segments) {
-      const k = horizonReveal(segment.position.z - playerZ);
-      const show = k > 0.02;
-      const s = Math.max(0.001, k);
-      for (const child of segment.children) {
-        if (!child.userData.horizonFade) continue;
-        child.visible = show;
-        child.scale.setScalar(s);
-      }
-    }
   }
 
   /** Signage baked into shared maps: barrier stencil, marshal and distance boards. */
@@ -504,13 +477,14 @@ export class TrackWorld {
     this.kerbMat.color.setHex(0xffffff).lerp(this.zoneTint.setHex(world.neon), 0.14);
   }
 
-  private applyZone(zone: Zone) {
-    this.fog.color.setHex(zone.fog);
-    this.fog.density = zone.fogDensity;
+  private applyZone(zone: Zone, dt = 0) {
+    const snap = dt <= 0 ? 1 : 1 - Math.exp(-1.2 * dt);
+    this.fog.color.lerp(new THREE.Color(zone.fog), snap);
+    this.fog.density += (zone.fogDensity - this.fog.density) * snap;
     const day = zone.star < 0.05 && this.circuit.cityStyle === "towers";
-    this.skyMat.uniforms.horizon.value.setHex(zone.horizon);
+    (this.skyMat.uniforms.horizon.value as THREE.Color).lerp(new THREE.Color(zone.horizon), snap);
+    (this.skyMat.uniforms.top.value as THREE.Color).lerp(new THREE.Color(zone.top), snap);
     this.skyMat.uniforms.neon.value.setHex(zone.neon);
-    this.skyMat.uniforms.top.value.setHex(zone.top);
     this.skyMat.uniforms.glow.value = day ? 0 : zone.glow;
     this.skyMat.uniforms.dayAmount.value = day ? 1 : 0;
     this.skyMat.uniforms.sunColor.value.setHex(day ? 0xfff3c4 : zone.lamp);
@@ -648,28 +622,53 @@ export class TrackWorld {
   }
 
   private makeStars() {
-    const count = 420;
+    const count = 360;
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 720;
-      pos[i * 3 + 1] = 48 + Math.random() * 180;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 900;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(0.18 + Math.random() * 0.82);
+      const r = 340 + Math.random() * 160;
+      pos[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
+      pos[i * 3 + 1] = Math.max(64, Math.cos(phi) * r + 36);
+      pos[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * r;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const disc = document.createElement("canvas");
+    disc.width = 32;
+    disc.height = 32;
+    const ctx = disc.getContext("2d");
+    if (ctx) {
+      const glow = ctx.createRadialGradient(16, 16, 0, 16, 16, 15);
+      glow.addColorStop(0, "rgba(255,255,255,1)");
+      glow.addColorStop(0.35, "rgba(210,230,255,0.55)");
+      glow.addColorStop(1, "rgba(180,210,255,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 32, 32);
+    }
+    const starMap = new THREE.CanvasTexture(disc);
+    starMap.colorSpace = THREE.NoColorSpace;
+    starMap.needsUpdate = true;
     this.starMat = new THREE.PointsMaterial({
       color: 0xcfe8ff,
-      size: 0.22,
+      size: 1.35,
+      map: starMap,
       transparent: true,
       opacity: this.circuit.zones[0].star,
       depthWrite: false,
-      sizeAttenuation: true,
+      sizeAttenuation: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      fog: false,
     });
-    return new THREE.Points(geo, this.starMat);
+    const stars = new THREE.Points(geo, this.starMat);
+    stars.frustumCulled = false;
+    stars.visible = this.circuit.zones[0].star >= 0.05;
+    return stars;
   }
 
   private makeWeatherField() {
-    const count = 280;
+    const count = 192;
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       pos[i * 3] = (Math.random() - 0.5) * WEATHER_WIDTH;
@@ -680,49 +679,130 @@ export class TrackWorld {
     this.weatherAttr = new THREE.BufferAttribute(pos, 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", this.weatherAttr);
+    const sprite = (draw: (ctx: CanvasRenderingContext2D, s: number) => void) => {
+      const el = document.createElement("canvas");
+      const s = 64;
+      el.width = s;
+      el.height = s;
+      const ctx = el.getContext("2d");
+      if (ctx) draw(ctx, s);
+      const tex = new THREE.CanvasTexture(el);
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    };
+    const rainMap = sprite((ctx, s) => {
+      const g = ctx.createLinearGradient(s / 2, 0, s / 2, s);
+      g.addColorStop(0, "rgba(220,236,255,0)");
+      g.addColorStop(0.18, "rgba(220,236,255,0.18)");
+      g.addColorStop(0.55, "rgba(255,255,255,0.95)");
+      g.addColorStop(1, "rgba(200,224,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(s * 0.47, 0, s * 0.06, s);
+    });
+    const dustMap = sprite((ctx, s) => {
+      const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s * 0.48);
+      g.addColorStop(0, "rgba(255,236,210,0.55)");
+      g.addColorStop(0.45, "rgba(220,190,150,0.18)");
+      g.addColorStop(1, "rgba(180,150,110,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, s, s);
+    });
+    const snowMap = sprite((ctx, s) => {
+      const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s * 0.42);
+      g.addColorStop(0, "rgba(255,255,255,1)");
+      g.addColorStop(0.4, "rgba(232,242,248,0.7)");
+      g.addColorStop(1, "rgba(220,232,244,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, s, s);
+    });
     this.weatherMat = new THREE.PointsMaterial({
       color: 0xbfd6e8,
       size: 0.4,
+      map: rainMap,
       transparent: true,
       opacity: 0.45,
       depthWrite: false,
       sizeAttenuation: true,
+      blending: THREE.AdditiveBlending,
     });
     const field = new THREE.Points(geo, this.weatherMat);
     field.frustumCulled = false;
     field.visible = false;
+    field.userData = { rainMap, dustMap, snowMap, live: 0, wrapY: WEATHER_HEIGHT };
     return field;
   }
 
   private applyWeather(kind: WeatherKind) {
     this.weatherKind = kind;
     this.weatherField.visible = kind !== "clear";
+    const reduced =
+      typeof document !== "undefined" &&
+      Boolean(document.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const maps = this.weatherField.userData as {
+      rainMap: THREE.Texture;
+      dustMap: THREE.Texture;
+      snowMap: THREE.Texture;
+      live: number;
+      wrapY: number;
+    };
+    const scatter = (live: number, yMax: number, width: number) => {
+      const pos = this.weatherPos;
+      for (let i = 0; i < pos.length; i += 3) {
+        if (i / 3 >= live) {
+          pos[i] = 0;
+          pos[i + 1] = -40;
+          pos[i + 2] = 0;
+          continue;
+        }
+        pos[i] = (Math.random() - 0.5) * width;
+        pos[i + 1] = Math.random() * yMax;
+        pos[i + 2] = -WEATHER_BACK + Math.random() * WEATHER_SPAN;
+      }
+      maps.live = live;
+      maps.wrapY = yMax;
+      this.weatherAttr.needsUpdate = true;
+    };
     if (kind === "rain") {
       this.weatherMat.color.setHex(0xc4dcf0);
-      this.weatherMat.size = 0.42;
-      this.weatherMat.opacity = 0.5;
+      this.weatherMat.map = maps.rainMap;
+      this.weatherMat.size = 2.15;
+      this.weatherMat.opacity = reduced ? 0.22 : 0.4;
+      this.weatherMat.blending = THREE.AdditiveBlending;
+      this.weatherMat.fog = false;
+      scatter(reduced ? 56 : 150, WEATHER_HEIGHT, 32);
       this.roadMat.roughness = 0.3;
       this.roadMat.clearcoat = 0.58;
       this.roadMat.clearcoatRoughness = 0.28;
     } else if (kind === "dust") {
       this.weatherMat.color.setHex(0xd8bb92);
-      this.weatherMat.size = 0.3;
-      this.weatherMat.opacity = 0.3;
+      this.weatherMat.map = maps.dustMap;
+      this.weatherMat.size = 0.26;
+      this.weatherMat.opacity = 0.11;
+      this.weatherMat.blending = THREE.NormalBlending;
+      this.weatherMat.fog = true;
+      scatter(reduced ? 70 : 140, 8, WEATHER_WIDTH);
       this.roadMat.roughness = 0.52;
       this.roadMat.clearcoat = 0.18;
       this.roadMat.clearcoatRoughness = 0.6;
     } else if (kind === "snow") {
       this.weatherMat.color.setHex(0xe8f2f8);
-      this.weatherMat.size = 0.55;
-      this.weatherMat.opacity = 0.7;
+      this.weatherMat.map = maps.snowMap;
+      this.weatherMat.size = 1.08;
+      this.weatherMat.opacity = 0.48;
+      this.weatherMat.blending = THREE.AdditiveBlending;
+      this.weatherMat.fog = true;
+      scatter(reduced ? 22 : 40, WEATHER_HEIGHT, WEATHER_WIDTH);
       this.roadMat.roughness = 0.22;
       this.roadMat.clearcoat = 0.7;
       this.roadMat.clearcoatRoughness = 0.18;
     } else {
+      maps.live = 0;
       this.roadMat.roughness = 0.38;
       this.roadMat.clearcoat = 0.42;
       this.roadMat.clearcoatRoughness = 0.38;
     }
+    this.weatherMat.needsUpdate = true;
   }
 
   private updateWeather(playerZ: number, kind: WeatherKind) {
@@ -738,17 +818,27 @@ export class TrackWorld {
     this.lastPlayerZ = playerZ;
     this.weatherField.position.z = playerZ;
 
-    const fall = kind === "rain" ? 52 : kind === "snow" ? 14 : 6;
-    const sway = kind === "rain" ? 0 : kind === "snow" ? 0.9 : 1.8;
+    const follow = kind === "rain";
+    const fall = kind === "rain" ? 34 : kind === "snow" ? 4.8 : 2.8;
+    const sway = kind === "rain" ? 0.28 : kind === "snow" ? 1.15 : 2.4;
+    const wrapY = (this.weatherField.userData.wrapY as number) || WEATHER_HEIGHT;
+    const live = (this.weatherField.userData.live as number) || 0;
     const pos = this.weatherPos;
-    for (let i = 0; i < pos.length; i += 3) {
+    const end = Math.min(pos.length, live * 3);
+    for (let i = 0; i < end; i += 3) {
       let y = pos[i + 1] - fall * dt;
-      let z = pos[i + 2] - dz;
-      if (y < 0) y += WEATHER_HEIGHT;
+      let z = pos[i + 2] - (follow ? dz * 0.1 : dz);
+      if (y < 0) {
+        y += wrapY;
+        if (follow) {
+          pos[i] = (Math.random() - 0.5) * 32;
+          z = -WEATHER_BACK + Math.random() * WEATHER_SPAN;
+        }
+      }
       if (z < -WEATHER_BACK) z += WEATHER_SPAN;
       else if (z > WEATHER_SPAN - WEATHER_BACK) z -= WEATHER_SPAN;
       if (sway > 0) {
-        const x = pos[i] + Math.sin(now * 0.0009 + i) * sway * dt;
+        const x = pos[i] + Math.sin(now * 0.0007 + i) * sway * dt;
         pos[i] = x > WEATHER_WIDTH / 2 ? -WEATHER_WIDTH / 2 : x < -WEATHER_WIDTH / 2 ? WEATHER_WIDTH / 2 : x;
       }
       pos[i + 1] = y;
@@ -1895,7 +1985,6 @@ export class TrackWorld {
     const n = cluster === 0 ? 4 : 2 + (cluster % 2);
     const proto = createTree();
     const grove = new THREE.Group();
-    grove.userData.horizonFade = true;
     const cx = side * (17.2 + (cluster % 4) * 2.6 + (index % 3) * 1.15);
     const cz = ((index * 11 + cluster * 3) % 19) - 9;
     for (let t = 0; t < n; t++) {
@@ -2086,7 +2175,6 @@ export class TrackWorld {
 
   private addGantry(g: THREE.Group, index: number) {
     const rig = new THREE.Group();
-    rig.userData.horizonFade = true;
     const steel = new THREE.MeshStandardMaterial({ color: 0x3c444a, metalness: 0.62, roughness: 0.34 });
     const paint = new THREE.MeshStandardMaterial({ color: 0x2a3238, metalness: 0.4, roughness: 0.42 });
     const span = ROAD.width + 7.4;
@@ -2146,7 +2234,6 @@ export class TrackWorld {
       side: THREE.DoubleSide,
     });
     const rig = new THREE.Group();
-    rig.userData.horizonFade = true;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(10, 5), boardMat);
     const side = index % 2 === 0 ? -1 : 1;
     board.position.set(side * (ROAD.halfWidth + 8.5), 6.2, 0);
@@ -2158,7 +2245,6 @@ export class TrackWorld {
 
   private addOverpass(g: THREE.Group) {
     const rig = new THREE.Group();
-    rig.userData.horizonFade = true;
     const concrete = new THREE.MeshStandardMaterial({
       color: 0xc4c6c2,
       roughness: 0.9,
@@ -2204,7 +2290,6 @@ export class TrackWorld {
 
   private addMarshal(g: THREE.Group, index: number) {
     const rig = new THREE.Group();
-    rig.userData.horizonFade = true;
     const side = index % 2 === 0 ? -1 : 1;
     const post = new THREE.Mesh(this.signPostGeo, this.postMat);
     post.position.set(side * (ROAD.halfWidth + 2.15), 0.6, 8);
@@ -2217,7 +2302,6 @@ export class TrackWorld {
 
   private addDistanceMarker(g: THREE.Group, index: number) {
     const rig = new THREE.Group();
-    rig.userData.horizonFade = true;
     const side = index % 2 === 0 ? 1 : -1;
     const post = new THREE.Mesh(this.signPostGeo, this.postMat);
     post.position.set(side * (ROAD.halfWidth + 1.85), 0.6, -6);

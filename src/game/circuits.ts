@@ -44,8 +44,8 @@ export type WorldDef = {
 const HARBOR: WorldDef = {
   id: "harbor",
   name: "Voltage Circuit",
-  tagline: "Sunlit harbor highway, grass banks, open sky.",
-  event: "HARBOR GP  ·  DAY RUN",
+  tagline: "Sunlit harbor highway. Grass banks, open sky.",
+  event: "HARBOR GP  ·  LIGHTS OUT",
   unlockBest: 0,
   unlockCost: 0,
   neon: BRAND.cyan,
@@ -54,17 +54,17 @@ const HARBOR: WorldDef = {
   gravel: 0x4a6a32,
   wall: 0xb8c0c4,
   cityStyle: "towers",
-  signs: ["HARBOR GP 2 km", "VOLTAGE CKT", "LANES OPEN"],
+  signs: ["HARBOR GP 2 km", "VOLTAGE CKT", "PIT EXIT"],
   boards: [
     { title: "HARBOR GP", kicker: "HIGHWAY CIRCUIT  ·  DAY", color: "#2a6a88" },
     { title: "VOLTAGE CIRCUIT", kicker: "COASTAL RUN", color: "#7a2458" },
-    { title: "MIDNIGHT CUP", kicker: "ROUND 04  ·  HARBOR", color: "#6a5a28" },
-    { title: "GRID LIGHT", kicker: "VOLTAGE SERIES  ·  LIVE", color: "#3a5468" },
+    { title: "HARBOR CUP", kicker: "ROUND 04  ·  HARBOR", color: "#6a5a28" },
+    { title: "LIGHTS OUT", kicker: "VOLTAGE SERIES  ·  LIVE", color: "#3a5468" },
   ],
   thresholds: [800, 2000, 4000],
   zones: [
     {
-      name: "Harbor Lights",
+      name: "Harbor Bank",
       fog: 0xc8e8fa,
       horizon: 0x86ccf4,
       neon: BRAND.cyan,
@@ -79,7 +79,7 @@ const HARBOR: WorldDef = {
       weather: "clear",
     },
     {
-      name: "Neon Cut",
+      name: "Coast Cut",
       fog: 0xd0ecfc,
       horizon: 0x92d4f6,
       neon: BRAND.magenta,

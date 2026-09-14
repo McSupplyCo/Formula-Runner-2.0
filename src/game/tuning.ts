@@ -23,7 +23,7 @@ export const ROAD = {
     return this.halfWidth - 0.95;
   },
   segmentLength: 48,
-  segmentCount: 18,
+  segmentCount: 26,
 } as const;
 
 export const CARS = [
@@ -122,10 +122,11 @@ export const DRIVE = {
 } as const;
 
 export const SPAWN = {
-  minLookahead: 110,
-  lookaheadSeconds: 1.45,
+  /** Spawn far enough that packs read as highway traffic instead of popping in. */
+  minLookahead: 148,
+  lookaheadSeconds: 1.82,
   despawnBehind: 28,
-  introSafeDistance: 38,
+  introSafeDistance: 52,
   minGapLanes: 1,
 } as const;
 
@@ -155,7 +156,7 @@ export const CAMERA = {
   boostPunch: 0.5,
   landDrop: 0.12,
   lookHeight: 0.96,
-  far: 920,
+  far: 980,
 } as const;
 
 export const CHASSIS = {

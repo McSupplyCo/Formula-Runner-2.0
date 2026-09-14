@@ -132,16 +132,6 @@ function headlamp() {
   });
 }
 
-function taillamp() {
-  return mat("taillamp", {
-    color: 0xff2a3a,
-    emissive: 0xff1430,
-    emissiveIntensity: 1.9,
-    roughness: 0.28,
-    metalness: 0.15,
-  });
-}
-
 function accentCoat(color: number) {
   return new THREE.MeshPhysicalMaterial({
     color,
@@ -751,12 +741,6 @@ function plateMaterial(label: string): THREE.MeshBasicMaterial | null {
   });
 }
 
-function racingPlateText(value: number): string {
-  const n = Math.max(0, Math.min(999, Math.floor(value)));
-  if (n > 99) return String(n);
-  return String(n).padStart(2, "0");
-}
-
 function addRearPlate(group: THREE.Group, label: string, z = -2.1, y = 0.36) {
   const face = plateMaterial(label);
   if (!face) return;
@@ -769,32 +753,6 @@ function addRearPlate(group: THREE.Group, label: string, z = -2.1, y = 0.36) {
   plate.rotation.y = Math.PI;
   plate.renderOrder = 2;
   group.add(plate);
-}
-
-function addLedTailBar(group: THREE.Group, z = -2.08, y = 0.52, width = 1.48) {
-  const bar = mesh(new RoundedBoxGeometry(width, 0.055, 0.045, 1, 0.02), taillamp());
-  bar.position.set(0, y, z);
-  group.add(bar);
-  const inner = mesh(
-    new THREE.BoxGeometry(width * 0.92, 0.018, 0.02),
-    mat("tailLed", { color: 0xff6a72, emissive: 0xff2030, emissiveIntensity: 2.2, roughness: 0.2 }),
-  );
-  inner.position.set(0, y, z - 0.012);
-  group.add(inner);
-}
-
-function addHeadlampClusters(group: THREE.Group, z = 2.08, y = 0.46, spread = 0.58) {
-  for (const x of [-spread, spread]) {
-    const lamp = mesh(new RoundedBoxGeometry(0.38, 0.1, 0.08, 1, 0.025), headlamp());
-    lamp.position.set(x, y, z);
-    group.add(lamp);
-    const drl = mesh(
-      new THREE.BoxGeometry(0.32, 0.016, 0.02),
-      mat("drl", { color: 0xf8fdff, emissive: 0xe8f4ff, emissiveIntensity: 1.6, roughness: 0.12 }),
-    );
-    drl.position.set(x, y + 0.055, z + 0.02);
-    group.add(drl);
-  }
 }
 
 function trafficLamp() {
@@ -906,122 +864,6 @@ function addQuadExhaust(group: THREE.Group, z = -2.06) {
     core.position.set(x, 0.26, z - 0.04);
     group.add(core);
   }
-}
-
-/**
- * Production sports sedan for the player. Unique paint instances so garage colors
- * never share materials with traffic.
- */
-export function createPlayerCar(
-  body: number,
-  accent: number,
-  secondary?: number,
-  opts?: { rim?: number; number?: number; glow?: number },
-): THREE.Group {
-  const group = new THREE.Group();
-  group.name = "player";
-  const rimMat = typeof opts?.rim === "number" ? rimPaint(opts.rim >>> 0) : undefined;
-  const coat = paint(body, 0.24);
-  const trim = paint(secondary ?? darkerBody(body), 0.28);
-  const neon = accentCoat(accent);
-  const dark = carbon();
-  const glassMat = glass();
-
-  group.add(contactShadow(1.85, 4.2));
-
-  if (typeof opts?.glow === "number" && Number.isFinite(opts.glow) && (opts.glow >>> 0) > 0x222222) {
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: opts.glow >>> 0,
-      transparent: true,
-      opacity: 0.45,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      toneMapped: false,
-    });
-    const underglow = mesh(new RoundedBoxGeometry(1.55, 0.02, 3.15, 1, 0.04), glowMat);
-    underglow.position.set(0, 0.08, 0.02);
-    group.add(underglow);
-    for (const x of [-0.62, 0.62]) {
-      const rail = mesh(new THREE.BoxGeometry(0.22, 0.016, 2.2), glowMat);
-      rail.position.set(x, 0.078, 0.02);
-      group.add(rail);
-    }
-  }
-
-  const hull = mesh(
-    extrudeBody(
-      [
-        [2.1, 0.1],
-        [2.08, 0.34],
-        [1.78, 0.5],
-        [1.12, 0.54],
-        [0.78, 0.58],
-        [0.4, 1.14],
-        [-0.52, 1.22],
-        [-1.02, 1.16],
-        [-1.36, 0.76],
-        [-1.78, 0.52],
-        [-2.04, 0.46],
-        [-2.12, 0.28],
-        [-2.12, 0.1],
-      ],
-      1.76,
-    ),
-    coat,
-  );
-  group.add(hull);
-
-  const cabin = mesh(new RoundedBoxGeometry(1.32, 0.36, 1.48, 2, 0.08), glassMat);
-  cabin.position.set(0, 0.96, -0.18);
-  group.add(cabin);
-
-  addSedanVolumes(group, coat, glassMat, -0.18);
-  addBodywork(group, 0.96, -0.18, trim);
-
-  const belt = mesh(new THREE.BoxGeometry(1.72, 0.03, 0.06), neon);
-  belt.position.set(0, 0.58, 0.04);
-  group.add(belt);
-  const hoodStripe = mesh(new THREE.BoxGeometry(0.08, 0.012, 0.9), neon);
-  hoodStripe.position.set(0, 0.545, 1.38);
-  group.add(hoodStripe);
-
-  for (const x of [-0.22, 0.22]) {
-    const vent = mesh(new THREE.BoxGeometry(0.18, 0.02, 0.32), dark);
-    vent.position.set(x, 0.54, 1.08);
-    group.add(vent);
-  }
-
-  const spoiler = mesh(new RoundedBoxGeometry(1.48, 0.035, 0.22, 1, 0.02), coat);
-  spoiler.position.set(0, 0.72, -1.98);
-  group.add(spoiler);
-  const lip = mesh(new THREE.BoxGeometry(1.42, 0.018, 0.08), trim);
-  lip.position.set(0, 0.74, -1.88);
-  group.add(lip);
-  for (const x of [-0.68, 0.68]) {
-    const stay = mesh(new THREE.BoxGeometry(0.04, 0.12, 0.08), dark);
-    stay.position.set(x, 0.64, -1.92);
-    group.add(stay);
-  }
-
-  addHeadlampClusters(group, 2.1, 0.46, 0.56);
-  addHeadlights(group, 0.46, 2.06, 0.52);
-  addLedTailBar(group, -2.1, 0.52, 1.52);
-
-  const rearValance = mesh(new THREE.BoxGeometry(1.5, 0.1, 0.08), dark);
-  rearValance.position.set(0, 0.28, -2.08);
-  group.add(rearValance);
-  addQuadExhaust(group, -2.08);
-
-  const plateValue = typeof opts?.number === "number" ? opts.number : 1;
-  addRearPlate(group, racingPlateText(plateValue), -2.12, 0.36);
-
-  placeWheel(group, -0.82, 0.29, 1.28, true, rimMat);
-  placeWheel(group, 0.82, 0.29, 1.28, true, rimMat);
-  placeWheel(group, -0.84, 0.31, -1.28, false, rimMat);
-  placeWheel(group, 0.84, 0.31, -1.28, false, rimMat);
-
-  enableCarShadows(group);
-  return group;
 }
 
 const GT_PAINT = [0x1a222c, 0x2a1618, 0x152018, 0x3a3e46, 0xc5cad1, 0x1a2436, 0x2a2418, 0x241c28];
@@ -1260,16 +1102,16 @@ export function createLightPole(): THREE.Group {
   visor.position.set(2.6, shaftH + 0.32, 0);
   visor.rotation.z = 0.08;
   const lens = mesh(
-    new THREE.BoxGeometry(0.7, 0.022, 0.26),
-    mat("lampLensDay", {
-      color: 0xeee4d2,
-      emissive: 0xffe2b0,
-      emissiveIntensity: 0.14,
-      roughness: 0.4,
-      metalness: 0.1,
+    new THREE.BoxGeometry(0.74, 0.03, 0.28),
+    mat("lampLens", {
+      color: 0xc4b090,
+      emissive: 0xffe6b8,
+      emissiveIntensity: 0.95,
+      roughness: 0.28,
+      metalness: 0.08,
     }),
   );
-  lens.position.set(2.6, shaftH + 0.3, 0);
+  lens.position.set(2.6, shaftH + 0.29, 0);
 
   group.add(base, collar, shaft, rise, arm, tenon, housing, visor, lens);
   return group;
