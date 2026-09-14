@@ -108,6 +108,10 @@ export class GameAudio {
     this.blip(164, 0.09, "triangle", 0.03);
   }
 
+  playDeny() {
+    this.blip(180, 0.08, "square", 0.03);
+  }
+
   playCountdown(step: number) {
     this.blip(step >= 3 ? 620 : 390, 0.11, "sine", 0.055);
   }
