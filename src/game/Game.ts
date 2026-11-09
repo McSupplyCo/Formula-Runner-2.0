@@ -72,6 +72,7 @@ export class Game {
   mode: GameMode = "title";
   run: RunStats = emptyRun();
   toasts: Toast[] = [];
+  private toastDirty = true;
   fps = 60;
   lastBest = false;
   private lastCredits = 0;
@@ -96,6 +97,7 @@ export class Game {
   private countdown = 0;
   private crashTimer = 0;
   private shake = 0;
+  private eventFxTimer = 0;
   private clock = new THREE.Clock();
   private prevSpeed = 0;
   private boostPunch = 0;
@@ -146,6 +148,7 @@ export class Game {
     this.world = new TrackWorld(this.scene, worldById(this.save.selectedWorld));
     const paint = fittedSpec(this.save, this.save.selectedCar);
     this.playerMesh = createFormulaCar(paint.color, paint.accent, paint.secondary, {
+      variant: this.save.selectedCar,
       rim: paint.rim,
       number: paint.number,
       glow: paint.glow,
@@ -166,6 +169,7 @@ export class Game {
 
     this.input.attach(canvas);
     this.bindUi();
+    document.addEventListener("keydown", this.onPauseTab);
     if (matchMedia("(prefers-reduced-motion: reduce)").matches && !hasStoredSave()) {
       this.save.reducedMotion = true;
       (this.ui.motion as HTMLInputElement).checked = true;
@@ -188,6 +192,7 @@ export class Game {
     cancelAnimationFrame(this.raf);
     window.removeEventListener("resize", this.resize);
     document.removeEventListener("visibilitychange", this.onVisibility);
+    document.removeEventListener("keydown", this.onPauseTab);
     this.renderer.setAnimationLoop(null);
     this.renderer.dispose();
     this.renderer.forceContextLoss();
@@ -432,7 +437,7 @@ export class Game {
     const lookahead = Math.max(SPAWN.minLookahead, (this.player.speed / 3.6) * SPAWN.lookaheadSeconds);
     const origin = this.player.z + lookahead;
     const blocked = lanesBlockedNear(this.traffic, origin, 14);
-    const pattern = pickFairPattern(this.run.distance, Math.random, blocked);
+    const pattern = pickFairPattern(this.run.distance, Math.random, blocked, this.traffic, origin);
     if (!pattern) return;
     const cars = materializePattern(pattern, origin, baseSpeed, moverChance, Math.random);
     for (const car of cars) {
@@ -457,6 +462,7 @@ export class Game {
     this.audio.playNearMiss(this.run.combo);
     this.buzz(12);
     this.shake = Math.max(this.shake, 0.03);
+    this.flashEvent("near");
   }
 
   private awardOvertake(lateral: number) {
@@ -498,6 +504,7 @@ export class Game {
       this.showRailPanel("results");
       this.renderResults();
       this.renderTitle();
+      this.ui.again.focus();
       this.queueBreak();
       return;
     }
@@ -526,17 +533,45 @@ export class Game {
     this.showRailPanel("results");
     this.renderResults();
     this.renderTitle();
+    this.ui.again.focus();
     this.queueBreak();
   }
 
   private setPause(paused: boolean) {
     this.mode = paused ? "paused" : "playing";
     this.setVisible("pause", paused);
+    this.setPauseIsolation(paused);
     if (paused) {
       this.audio.update(0, false);
       this.ui.resume.focus();
+    } else {
+      this.ui.pauseHud.focus();
     }
   }
+
+  private setPauseIsolation(paused: boolean) {
+    this.ui.shell.inert = paused;
+    this.ui.stage.querySelector<HTMLElement>(".stage-chrome")!.inert = paused;
+    this.ui.viewport.querySelectorAll<HTMLElement>(":scope > :not(#pause)").forEach((element) => {
+      element.inert = paused;
+    });
+  }
+
+  private onPauseTab = (event: KeyboardEvent) => {
+    if (this.mode !== "paused" || event.key !== "Tab") return;
+    const controls = [this.ui.resume, this.ui.quit];
+    const activeIndex = controls.indexOf(document.activeElement as HTMLElement);
+    if (activeIndex === 0 && event.shiftKey) {
+      event.preventDefault();
+      this.ui.quit.focus();
+    } else if (activeIndex === controls.length - 1 && !event.shiftKey) {
+      event.preventDefault();
+      this.ui.resume.focus();
+    } else if (activeIndex < 0) {
+      event.preventDefault();
+      this.ui.resume.focus();
+    }
+  };
 
   private sync(dt: number) {
     this.playerMesh.position.set(this.player.x, this.chassis.y, this.player.z);
@@ -552,11 +587,18 @@ export class Game {
     this.updateBoostFx(dt);
     this.updateSpeedLines(dt);
     this.updateSpray(dt);
-    this.toasts = this.toasts.filter((toast) => {
+    this.updateEventFx(dt);
+    let expired = false;
+    for (let i = this.toasts.length - 1; i >= 0; i--) {
+      const toast = this.toasts[i];
       toast.life -= dt;
-      return toast.life > 0;
-    });
-    this.paintToasts();
+      if (toast.life <= 0) {
+        this.toasts.splice(i, 1);
+        expired = true;
+      }
+    }
+    if (expired) this.toastDirty = true;
+    if (this.toastDirty) this.paintToasts();
     this.updateHud();
   }
 
@@ -900,14 +942,17 @@ export class Game {
 
   private pushToast(text: string, color: string) {
     this.toasts.unshift({ text, life: 1.6, color });
-    this.toasts = this.toasts.slice(0, 3);
+    if (this.toasts.length > 3) this.toasts.pop();
+    this.toastDirty = true;
     this.paintToasts();
   }
 
   private paintToasts() {
+    if (!this.toastDirty) return;
     this.ui.toast.innerHTML = this.toasts
       .map((toast) => `<div style="color:${toast.color}">${toast.text}</div>`)
       .join("");
+    this.toastDirty = false;
   }
 
   private buzz(ms: number) {
@@ -1139,6 +1184,7 @@ export class Game {
     this.scene.remove(prev);
     disposeCar(prev);
     this.playerMesh = createFormulaCar(spec.color, spec.accent, spec.secondary, {
+      variant: id,
       rim: spec.rim,
       number: spec.number,
       glow: spec.glow,
@@ -1422,8 +1468,20 @@ export class Game {
     });
     this.audio.setVolumes(this.save.sfxVolume, this.save.musicVolume);
 
-    this.ui.brakeBtn.addEventListener("pointerdown", () => this.input.setBrakeButton(true));
-    window.addEventListener("pointerup", () => this.input.setBrakeButton(false));
+    let brakePointerId: number | null = null;
+    const releaseBrake = (event?: PointerEvent) => {
+      if (event && event.pointerId !== brakePointerId) return;
+      brakePointerId = null;
+      this.input.setBrakeButton(false);
+    };
+    this.ui.brakeBtn.addEventListener("pointerdown", (event) => {
+      if (brakePointerId !== null) return;
+      brakePointerId = event.pointerId;
+      this.input.setBrakeButton(true);
+    });
+    window.addEventListener("pointerup", releaseBrake);
+    window.addEventListener("pointercancel", releaseBrake);
+    window.addEventListener("blur", () => releaseBrake());
     this.ui.boostBtn.addEventListener("pointerdown", (event) => {
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
       this.input.setBoostButton(true);
@@ -1506,10 +1564,27 @@ export class Game {
   private burstCrash() {
     this.shake = Math.max(this.shake, 0.18);
     this.pushToast("CONTACT", "#ff8a9a");
+    this.flashEvent("impact");
+  }
+
+  private flashEvent(kind: "near" | "impact") {
+    if (this.save.reducedMotion) return;
+    const viewport = this.ui.viewport;
+    delete viewport.dataset.event;
+    void viewport.offsetWidth;
+    viewport.dataset.event = kind;
+    this.eventFxTimer = kind === "near" ? 0.42 : 0.5;
+  }
+
+  private updateEventFx(dt: number) {
+    if (this.eventFxTimer <= 0) return;
+    this.eventFxTimer = Math.max(0, this.eventFxTimer - dt);
+    if (this.eventFxTimer === 0) delete this.ui.viewport.dataset.event;
   }
 
   private toTitle() {
     if (this.consumeBreak("title")) return;
+    this.setPauseIsolation(false);
     this.mode = "title";
     this.audio.stopEngine();
     this.setVisible("results", false);
@@ -1525,6 +1600,7 @@ export class Game {
     this.resetFeel();
     this.world.update(0, 0);
     this.sync(0.016);
+    this.ui.play.focus();
   }
 
   private showRailPanel(id: "title" | "garage" | "results" | "settings") {

@@ -80,28 +80,29 @@ export const PARTS: PartInfo[] = [
 ];
 
 export const LIVERIES = [
-  { id: "apex-stock", car: "apex" as const, name: "Factory", cost: 0, color: 0x00e5ff, secondary: 0x0a1628, accent: 0xff006e },
-  { id: "apex-harbor", car: "apex" as const, name: "Harbor", cost: 420, color: 0x1a6a7a, secondary: 0x0e2430, accent: 0xc4a035 },
-  { id: "apex-void", car: "apex" as const, name: "Void", cost: 780, color: 0x12161c, secondary: 0x1c222c, accent: 0x00e5ff },
-  { id: "drift-stock", car: "drift" as const, name: "Factory", cost: 0, color: 0x39ff14, secondary: 0x102018, accent: 0xffd600 },
-  { id: "drift-moss", car: "drift" as const, name: "Moss", cost: 420, color: 0x1f4a28, secondary: 0x121810, accent: 0xd8c48a },
-  { id: "drift-gold", car: "drift" as const, name: "Gold stripe", cost: 780, color: 0x2a8a48, secondary: 0x102418, accent: 0xffd600 },
-  { id: "surge-stock", car: "surge" as const, name: "Factory", cost: 0, color: 0xff006e, secondary: 0x1a0810, accent: 0x00e5ff },
-  { id: "surge-wine", car: "surge" as const, name: "Wine", cost: 420, color: 0x6a1028, secondary: 0x180810, accent: 0xe8dcc8 },
-  { id: "surge-ivory", car: "surge" as const, name: "Ivory", cost: 780, color: 0xd8dde4, secondary: 0x2a3038, accent: 0xff006e },
-  { id: "apex-ion", car: "apex" as const, name: "Ion", cost: 960, color: 0x6a4cff, secondary: 0x0c1020, accent: 0x00e5ff },
-  { id: "apex-sun", car: "apex" as const, name: "Sun", cost: 960, color: 0xc4a035, secondary: 0x1a1408, accent: 0xff006e },
-  { id: "drift-ice", car: "drift" as const, name: "Ice", cost: 960, color: 0xc8f0ff, secondary: 0x102028, accent: 0x39ff14 },
-  { id: "surge-night", car: "surge" as const, name: "Night", cost: 960, color: 0x1a0828, secondary: 0x080410, accent: 0xff006e },
-  { id: "volt-stock", car: "volt" as const, name: "Factory", cost: 0, color: 0xffd600, secondary: 0x1c1804, accent: 0x00e5ff },
-  { id: "volt-amp", car: "volt" as const, name: "Amp", cost: 420, color: 0x2a2410, secondary: 0x101008, accent: 0x00e5ff },
-  { id: "volt-arc", car: "volt" as const, name: "Arc", cost: 780, color: 0xf4e8c0, secondary: 0x242018, accent: 0xff006e },
-  { id: "volt-ion", car: "volt" as const, name: "Ion", cost: 960, color: 0x1a1028, secondary: 0x0c0814, accent: 0xff2bd6 },
-  { id: "volt-gate", car: "volt" as const, name: "Gate", cost: 960, color: 0x0c2820, secondary: 0x061410, accent: 0x3dffc8 },
-  { id: "nyx-stock", car: "nyx" as const, name: "Factory", cost: 0, color: 0x7a5cff, secondary: 0x12081c, accent: 0xff2bd6 },
-  { id: "nyx-veil", car: "nyx" as const, name: "Veil", cost: 420, color: 0x1a1028, secondary: 0x0a0614, accent: 0x7a5cff },
-  { id: "nyx-bloom", car: "nyx" as const, name: "Bloom", cost: 780, color: 0xe8d8ff, secondary: 0x241830, accent: 0xff2bd6 },
-  { id: "nyx-void", car: "nyx" as const, name: "Void", cost: 960, color: 0x08060c, secondary: 0x101018, accent: 0xb8e8ff },
+  // Keep the legacy cosmetic IDs readable so existing save references remain valid.
+  { id: "apex-stock", car: "sixties" as const, name: "Workshop Ivory", cost: 0, color: 0xe7dfc9, secondary: 0x1f2526, accent: 0xc4452d },
+  { id: "apex-harbor", car: "sixties" as const, name: "Racing Green", cost: 420, color: 0x174a38, secondary: 0x14221c, accent: 0xd8bf8b },
+  { id: "apex-void", car: "sixties" as const, name: "Carbon Black", cost: 780, color: 0x202425, secondary: 0x101314, accent: 0xd5c49b },
+  { id: "drift-stock", car: "seventies" as const, name: "Workshop Ivory", cost: 0, color: 0xd8d0b5, secondary: 0x202322, accent: 0xb84c32 },
+  { id: "drift-moss", car: "seventies" as const, name: "Paddock Green", cost: 420, color: 0x28543d, secondary: 0x15251d, accent: 0xd0b95f },
+  { id: "drift-gold", car: "seventies" as const, name: "Ochre Line", cost: 780, color: 0x8e6425, secondary: 0x242016, accent: 0xe5d2a7 },
+  { id: "surge-stock", car: "eighties" as const, name: "Workshop Ivory", cost: 0, color: 0xd9d7ce, secondary: 0x252827, accent: 0x245b85 },
+  { id: "surge-wine", car: "eighties" as const, name: "Oxide Red", cost: 420, color: 0x8d302c, secondary: 0x241a1a, accent: 0xd9d7ce },
+  { id: "surge-ivory", car: "eighties" as const, name: "Aluminum", cost: 780, color: 0xb5bdc1, secondary: 0x22282c, accent: 0x476c84 },
+  { id: "apex-ion", car: "sixties" as const, name: "Blue Test", cost: 960, color: 0x365975, secondary: 0x18252d, accent: 0xd8bf8b },
+  { id: "apex-sun", car: "sixties" as const, name: "Saffron", cost: 960, color: 0xc9a64a, secondary: 0x272217, accent: 0x822c2c },
+  { id: "drift-ice", car: "seventies" as const, name: "Chalk", cost: 960, color: 0xe1d9c7, secondary: 0x272724, accent: 0x3b6c59 },
+  { id: "surge-night", car: "eighties" as const, name: "Midnight", cost: 960, color: 0x26384a, secondary: 0x11191f, accent: 0xe5d8bd },
+  { id: "volt-stock", car: "nineties" as const, name: "Workshop Ivory", cost: 0, color: 0xd1d5d4, secondary: 0x232728, accent: 0xb33332 },
+  { id: "volt-amp", car: "nineties" as const, name: "Pitlane Red", cost: 420, color: 0xa72c2b, secondary: 0x261a1a, accent: 0xe4dbcc },
+  { id: "volt-arc", car: "nineties" as const, name: "Silverstone", cost: 780, color: 0xc2c8c9, secondary: 0x24292b, accent: 0x526f77 },
+  { id: "volt-ion", car: "nineties" as const, name: "Indigo", cost: 960, color: 0x384260, secondary: 0x171c2a, accent: 0xc9aa64 },
+  { id: "volt-gate", car: "nineties" as const, name: "Deep Teal", cost: 960, color: 0x2f6560, secondary: 0x182a28, accent: 0xd8d0b5 },
+  { id: "nyx-stock", car: "modern" as const, name: "Workshop Ivory", cost: 0, color: 0xdce0de, secondary: 0x1e2425, accent: 0x25624e },
+  { id: "nyx-veil", car: "modern" as const, name: "Forest", cost: 420, color: 0x28533f, secondary: 0x15231d, accent: 0xc4b58d },
+  { id: "nyx-bloom", car: "modern" as const, name: "Pearl", cost: 780, color: 0xdad8cd, secondary: 0x252927, accent: 0x547365 },
+  { id: "nyx-void", car: "modern" as const, name: "Graphite", cost: 960, color: 0x171b1c, secondary: 0x101314, accent: 0x91bbb0 },
 ] as const;
 
 export type LiveryId = (typeof LIVERIES)[number]["id"];
@@ -157,11 +158,11 @@ export const WORLD_UNLOCK = WORLDS.map((world) => ({
 export const HOME_WORLD: WorldId = "harbor";
 
 const CAR_NUMBERS: Record<string, number> = {
-  apex: 1,
-  drift: 11,
-  surge: 27,
-  volt: 44,
-  nyx: 88,
+  sixties: 1,
+  seventies: 11,
+  eighties: 27,
+  nineties: 44,
+  modern: 88,
 };
 
 export function defaultCarNumber(car: CarId): number {
@@ -183,7 +184,7 @@ export function emptyCarGarage(car: CarId): CarGarage {
     tires: 0,
     turbo: 0,
     aero: 0,
-    livery: `${car}-stock`,
+    livery: stock?.id ?? `${car}-stock`,
     primary: stock?.color ?? 0x00e5ff,
     secondary: stock?.secondary ?? 0x0a1628,
     accent: stock?.accent ?? 0xff006e,

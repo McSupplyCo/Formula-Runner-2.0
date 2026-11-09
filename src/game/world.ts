@@ -68,7 +68,7 @@ function makeJerseyGeometry(length: number) {
 }
 
 const HORIZON_MATS: Record<CityStyle, THREE.MeshStandardMaterialParameters> = {
-  towers: { color: 0x2a3a28, roughness: 0.94, metalness: 0.04, emissive: 0x1a2818, emissiveIntensity: 0.08 },
+  towers: { color: 0x3d5b4d, roughness: 0.94, metalness: 0.04, emissive: 0x263a32, emissiveIntensity: 0.08 },
   docks: { color: 0x140c08, roughness: 0.95, metalness: 0.05, emissive: 0x2a1206, emissiveIntensity: 0.2 },
   glass: { color: 0x0a1420, roughness: 0.7, metalness: 0.24, emissive: 0x14283c, emissiveIntensity: 0.26 },
   ridge: { color: 0x0e0b08, roughness: 1, metalness: 0.02, emissive: 0x1a1208, emissiveIntensity: 0.14 },
@@ -114,6 +114,8 @@ export class TrackWorld {
   private ground: THREE.Mesh;
   private groundMat: THREE.MeshStandardMaterial;
   private streetLights: THREE.SpotLight[] = [];
+  private streetPoles: Array<{ x: number; z: number; d: number }> = [];
+  private nearestStreetPoles: Array<{ index: number; d: number }> = [];
   private lightTint = new THREE.Color(0xffe4bc);
   private hemi: THREE.HemisphereLight;
   private moon: THREE.DirectionalLight;
@@ -125,6 +127,7 @@ export class TrackWorld {
   private eyeMat: THREE.MeshStandardMaterial;
   private starMat!: THREE.PointsMaterial;
   private zoneTint = new THREE.Color();
+  private colorTarget = new THREE.Color();
   private postGeo: THREE.BoxGeometry;
   private signPostGeo: THREE.BoxGeometry;
   private marshalGeo: THREE.PlaneGeometry;
@@ -132,8 +135,10 @@ export class TrackWorld {
   private postMat: THREE.MeshStandardMaterial;
   private marshalMats: THREE.MeshStandardMaterial[] = [];
   private distMats: THREE.MeshStandardMaterial[] = [];
-  private coneGeo: THREE.BoxGeometry;
-  private barrelGeo: THREE.BoxGeometry;
+  private coneGeo: THREE.CylinderGeometry;
+  private barrelGeo: THREE.CylinderGeometry;
+  private coneBandGeo: THREE.CylinderGeometry;
+  private barrelBandGeo: THREE.CylinderGeometry;
   private camPoleGeo: THREE.BoxGeometry;
   private camHeadGeo: THREE.BoxGeometry;
   private crateGeo: THREE.BoxGeometry;
@@ -145,6 +150,7 @@ export class TrackWorld {
   private railMat: THREE.MeshStandardMaterial;
   private coneMat: THREE.MeshStandardMaterial;
   private barrelMat: THREE.MeshStandardMaterial;
+  private safetyMarkingMat: THREE.MeshStandardMaterial;
   private camMat: THREE.MeshStandardMaterial;
   private propMat: THREE.MeshStandardMaterial;
   private weatherField: THREE.Points;
@@ -250,8 +256,10 @@ export class TrackWorld {
     this.signPostGeo = new THREE.BoxGeometry(0.06, 1.2, 0.06);
     this.marshalGeo = new THREE.PlaneGeometry(0.9, 0.72);
     this.distGeo = new THREE.PlaneGeometry(1.05, 0.78);
-    this.coneGeo = new THREE.BoxGeometry(0.26, 0.46, 0.26);
-    this.barrelGeo = new THREE.BoxGeometry(0.52, 0.78, 0.52);
+    this.coneGeo = new THREE.CylinderGeometry(0.02, 0.16, 0.46, 8);
+    this.barrelGeo = new THREE.CylinderGeometry(0.22, 0.25, 0.78, 10);
+    this.coneBandGeo = new THREE.CylinderGeometry(0.077, 0.105, 0.055, 8);
+    this.barrelBandGeo = new THREE.CylinderGeometry(0.232, 0.246, 0.09, 10);
     this.camPoleGeo = new THREE.BoxGeometry(0.07, 2.1, 0.07);
     this.camHeadGeo = new THREE.BoxGeometry(0.24, 0.18, 0.4);
     this.crateGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -267,6 +275,8 @@ export class TrackWorld {
       this.distGeo,
       this.coneGeo,
       this.barrelGeo,
+      this.coneBandGeo,
+      this.barrelBandGeo,
       this.camPoleGeo,
       this.camHeadGeo,
       this.crateGeo,
@@ -287,18 +297,23 @@ export class TrackWorld {
       emissiveIntensity: 0.18,
     });
     this.coneMat = new THREE.MeshStandardMaterial({
-      color: 0xff7a2a,
-      emissive: 0xff8a3a,
-      emissiveIntensity: 0.28,
+      color: 0xf2763e,
+      emissive: 0x57240f,
+      emissiveIntensity: 0.12,
       roughness: 0.62,
       metalness: 0.05,
     });
     this.barrelMat = new THREE.MeshStandardMaterial({
-      color: 0xd8452a,
-      emissive: 0x3a0c04,
-      emissiveIntensity: 0.2,
+      color: 0xc54e3f,
+      emissive: 0x35100b,
+      emissiveIntensity: 0.12,
       roughness: 0.7,
       metalness: 0.08,
+    });
+    this.safetyMarkingMat = new THREE.MeshStandardMaterial({
+      color: 0xf3eee1,
+      roughness: 0.62,
+      metalness: 0.02,
     });
     this.camMat = new THREE.MeshStandardMaterial({
       color: 0x10161e,
@@ -479,11 +494,11 @@ export class TrackWorld {
 
   private applyZone(zone: Zone, dt = 0) {
     const snap = dt <= 0 ? 1 : 1 - Math.exp(-1.2 * dt);
-    this.fog.color.lerp(new THREE.Color(zone.fog), snap);
+    this.fog.color.lerp(this.colorTarget.set(zone.fog), snap);
     this.fog.density += (zone.fogDensity - this.fog.density) * snap;
     const day = zone.star < 0.05 && this.circuit.cityStyle === "towers";
-    (this.skyMat.uniforms.horizon.value as THREE.Color).lerp(new THREE.Color(zone.horizon), snap);
-    (this.skyMat.uniforms.top.value as THREE.Color).lerp(new THREE.Color(zone.top), snap);
+    (this.skyMat.uniforms.horizon.value as THREE.Color).lerp(this.colorTarget.set(zone.horizon), snap);
+    (this.skyMat.uniforms.top.value as THREE.Color).lerp(this.colorTarget.set(zone.top), snap);
     this.skyMat.uniforms.neon.value.setHex(zone.neon);
     this.skyMat.uniforms.glow.value = day ? 0 : zone.glow;
     this.skyMat.uniforms.dayAmount.value = day ? 1 : 0;
@@ -500,7 +515,7 @@ export class TrackWorld {
     const horizonBase = HORIZON_MATS[this.circuit.cityStyle];
     this.horizonMat.color.set(horizonBase.color ?? 0x2a3a28);
     if (day) {
-      this.horizonMat.color.lerp(new THREE.Color(this.circuit.ground), 0.55).lerp(new THREE.Color(0x5a7048), 0.35);
+      this.horizonMat.color.lerp(this.colorTarget.set(this.circuit.ground), 0.55).lerp(this.colorTarget.set(0x5a7048), 0.35);
       this.horizonMat.emissive.setHex(0x000000);
       this.horizonMat.emissiveIntensity = 0;
     } else {
@@ -509,7 +524,7 @@ export class TrackWorld {
     }
     this.lightTint.setHex(zone.lamp);
     this.hemi.color.setHex(0xb4d8f4).lerp(this.zoneTint.setHex(zone.horizon), day ? 0.16 : 0.55);
-    this.hemi.groundColor.setHex(0x3a5a28).lerp(new THREE.Color(this.circuit.ground), 0.5);
+    this.hemi.groundColor.setHex(0x3a5a28).lerp(this.colorTarget.set(this.circuit.ground), 0.5);
     this.hemi.intensity = day ? 1.28 : 0.72;
     this.moon.color.setHex(day ? 0xfff4d4 : zone.lamp);
     this.moon.intensity = day ? 2.45 : 1.12;
@@ -549,20 +564,38 @@ export class TrackWorld {
   }
 
   private placeStreetLights(playerZ: number) {
-    const poles: Array<{ x: number; z: number; d: number }> = [];
+    if (this.streetPoles.length === 0) {
+      for (let i = 0; i < this.segments.length * 2; i++) {
+        this.streetPoles.push({ x: 0, z: 0, d: 0 });
+      }
+      for (let i = 0; i < this.streetLights.length; i++) {
+        this.nearestStreetPoles.push({ index: 0, d: Infinity });
+      }
+    }
+    let poleIndex = 0;
+    for (const nearest of this.nearestStreetPoles) nearest.d = Infinity;
     for (const segment of this.segments) {
       const z = segment.position.z;
       for (const side of [-1, 1] as const) {
-        poles.push({
-          x: side * (ROAD.halfWidth + 2.55),
-          z,
-          d: Math.abs(z - (playerZ + 14)),
-        });
+        const index = poleIndex++;
+        const pole = this.streetPoles[index];
+        pole.x = side * (ROAD.halfWidth + 2.55);
+        pole.z = z;
+        pole.d = Math.abs(z - (playerZ + 14));
+        const last = this.nearestStreetPoles.length - 1;
+        if (last < 0 || pole.d >= this.nearestStreetPoles[last].d) continue;
+        let insert = last;
+        while (insert > 0 && pole.d < this.nearestStreetPoles[insert - 1].d) {
+          this.nearestStreetPoles[insert].index = this.nearestStreetPoles[insert - 1].index;
+          this.nearestStreetPoles[insert].d = this.nearestStreetPoles[insert - 1].d;
+          insert--;
+        }
+        this.nearestStreetPoles[insert].index = index;
+        this.nearestStreetPoles[insert].d = pole.d;
       }
     }
-    poles.sort((a, b) => a.d - b.d);
     for (let i = 0; i < this.streetLights.length; i++) {
-      const pole = poles[i];
+      const pole = this.streetPoles[this.nearestStreetPoles[i].index];
       const lamp = this.streetLights[i];
       if (!pole) continue;
       lamp.color.copy(this.lightTint);
@@ -2147,7 +2180,10 @@ export class TrackWorld {
     for (let i = 0; i < 4; i++) {
       const cone = new THREE.Mesh(this.coneGeo, this.coneMat);
       cone.position.set(side * (ROAD.halfWidth + 0.72), 0.23, -12 + i * 6);
-      g.add(cone);
+      const band = new THREE.Mesh(this.coneBandGeo, this.safetyMarkingMat);
+      band.position.copy(cone.position);
+      band.position.y += 0.075;
+      g.add(cone, band);
     }
   }
 
@@ -2156,7 +2192,10 @@ export class TrackWorld {
     for (let i = 0; i < 3; i++) {
       const barrel = new THREE.Mesh(this.barrelGeo, this.barrelMat);
       barrel.position.set(side * (ROAD.halfWidth + 1.85), 0.39, 4 + i * 1.1);
-      g.add(barrel);
+      const band = new THREE.Mesh(this.barrelBandGeo, this.safetyMarkingMat);
+      band.position.copy(barrel.position);
+      band.position.y += 0.16;
+      g.add(barrel, band);
     }
   }
 

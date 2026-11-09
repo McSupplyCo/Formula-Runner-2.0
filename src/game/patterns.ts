@@ -257,13 +257,19 @@ export function pickFairPattern(
   distance: number,
   random: () => number,
   blocked: Iterable<number> = [],
+  traffic: Array<{ lane: number; z: number }> = [],
+  originZ = 0,
 ): Pattern | null {
   const closed = new Set(blocked);
   const pool = patternPoolAt(distance).filter((pattern) => patternHasThread(pattern));
-  const fair = pool.filter((pattern) => openLanes(pattern).some((lane) => !closed.has(lane)));
-  const list = fair.length ? fair : closed.size >= 3 ? [] : pool;
-  if (!list.length) return null;
-  return list[Math.floor(random() * list.length)] ?? list[0];
+  const fair = pool.filter((pattern) =>
+    openLanes(pattern).some((lane) => !closed.has(lane)) &&
+    pattern.cars.every((candidate) => traffic.every((car) =>
+      car.lane !== candidate.lane || Math.abs(car.z - (originZ + candidate.zOffset)) >= 12,
+    )),
+  );
+  if (!fair.length) return null;
+  return fair[Math.floor(random() * fair.length)] ?? fair[0];
 }
 
 export function pickPattern(distance: number, random: () => number): Pattern {

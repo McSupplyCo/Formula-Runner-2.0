@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { emptyCarGarage } from "../src/game/garage";
-import { commitRun, defaultSave, fingerprint, migrateSave, checksumMatches, withChecksum } from "../src/game/save";
+import { commitRun, defaultSave, fingerprint, legacyV4Fingerprint, migrateSave, checksumMatches, withChecksum } from "../src/game/save";
 import { SAVE_VERSION } from "../src/game/tuning";
 
-describe("save v4 migration", () => {
+describe("save migration", () => {
   it("maps v3 part names onto Engine/Tires/Turbo/Aero without wiping credits", () => {
     const next = migrateSave({
       version: 3,
@@ -87,6 +87,18 @@ describe("save v4 migration", () => {
     expect(checksumMatches(save)).toBe(true);
     expect(checksumMatches({ ...save, credits: 9999 })).toBe(false);
     expect(checksumMatches({ ...save, hudSpeedSide: "right" })).toBe(false);
+  });
+
+  it("checks the v5 replay ledger and accepts a valid v4 save during migration", () => {
+    const current = withChecksum({ ...defaultSave(), settledRunIds: ["settled-a"] });
+    expect(checksumMatches(current)).toBe(true);
+    expect(checksumMatches({ ...current, settledRunIds: ["settled-b"] })).toBe(false);
+
+    const v4 = { ...current, version: 4, checksum: "" };
+    v4.checksum = legacyV4Fingerprint(v4);
+    expect(checksumMatches(v4)).toBe(true);
+    expect(migrateSave(v4).version).toBe(SAVE_VERSION);
+    expect(migrateSave(v4).settledRunIds).toEqual(["settled-a"]);
   });
 });
 

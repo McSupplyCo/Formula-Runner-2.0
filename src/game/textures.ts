@@ -41,34 +41,25 @@ function toSignTexture(el: HTMLCanvasElement) {
   return tex;
 }
 
-function speckle(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  count: number,
-  color: (i: number) => string,
-  size = () => [1 + Math.random() * 2, 1 + Math.random()] as [number, number],
-) {
-  for (let i = 0; i < count; i++) {
-    ctx.fillStyle = color(i);
-    const [sw, sh] = size();
-    ctx.fillRect(Math.random() * w, Math.random() * h, sw, sh);
-  }
-}
+const CIRCUIT = {
+  ink: "#111416",
+  deep: "#25292b",
+  pale: "#e7e0d3",
+  cyan: "#71c4c5",
+  blue: "#477f88",
+  amber: "#e7a84c",
+};
 
-function highwayFace(ctx: CanvasRenderingContext2D, w: number, h: number, fill = "#0d5c3a") {
-  ctx.fillStyle = fill;
+function highwayFace(ctx: CanvasRenderingContext2D, w: number, h: number, fill = CIRCUIT.deep) {
+  ctx.fillStyle = CIRCUIT.ink;
   ctx.fillRect(0, 0, w, h);
-  const inset = Math.max(6, Math.round(Math.min(w, h) * 0.045));
-  const border = Math.max(4, Math.round(inset * 0.55));
-  ctx.fillStyle = "#f4f7f2";
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = fill;
-  ctx.fillRect(border, border, w - border * 2, h - border * 2);
-  ctx.fillStyle = "#f4f7f2";
-  ctx.fillRect(border + inset - border, border + inset - border, w - (border + inset - border) * 2, h - (border + inset - border) * 2);
-  ctx.fillStyle = fill;
+  const inset = Math.max(8, Math.round(Math.min(w, h) * 0.045));
+  ctx.fillStyle = CIRCUIT.cyan;
   ctx.fillRect(inset, inset, w - inset * 2, h - inset * 2);
+  ctx.fillStyle = fill;
+  ctx.fillRect(inset + 5, inset + 5, w - (inset + 5) * 2, h - (inset + 5) * 2);
+  ctx.fillStyle = "rgba(220,232,240,0.08)";
+  ctx.fillRect(inset + 14, inset + 14, w - (inset + 14) * 2, 3);
 }
 
 function fitText(
@@ -88,155 +79,133 @@ function fitText(
   return size;
 }
 
-/** Worn daylight asphalt. Crisp white dashes, not void black. */
+/** Fine-grain graphite asphalt with race-day ivory markings. */
 export function makeRoadTexture() {
   const w = 1024;
   const h = 1024;
   const { el, ctx } = canvas(w, h);
 
   const base = ctx.createLinearGradient(0, 0, w, 0);
-  base.addColorStop(0, "#8a8e92");
-  base.addColorStop(0.12, "#7c8186");
-  base.addColorStop(0.28, "#868b90");
-  base.addColorStop(0.5, "#82878c");
-  base.addColorStop(0.72, "#868b90");
-  base.addColorStop(0.88, "#7c8186");
-  base.addColorStop(1, "#8a8e92");
+  base.addColorStop(0, "#24282a");
+  base.addColorStop(0.12, "#2d3133");
+  base.addColorStop(0.5, "#34383a");
+  base.addColorStop(0.88, "#2d3133");
+  base.addColorStop(1, "#24282a");
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, w, h);
-
-  speckle(ctx, w, h, 42000, () => {
-    const n = 92 + Math.random() * 48;
-    const a = 0.12 + Math.random() * 0.28;
-    return `rgba(${n},${n + 1},${n + 3},${a})`;
-  }, () => [1 + Math.random() * 2.2, 1]);
-
-  speckle(ctx, w, h, 9000, () => {
-    const n = 48 + Math.random() * 28;
-    return `rgba(${n},${n},${n + 4},${0.1 + Math.random() * 0.2})`;
-  });
-
-  for (const x of [210, 430, 594, 814]) {
-    ctx.fillStyle = "rgba(62, 66, 70, 0.18)";
-    ctx.fillRect(x - 46, 0, 92, h);
+  // Deterministic aggregate flecks break up the surface without noisy repetition.
+  for (let i = 0; i < 1700; i++) {
+    const x = (i * 137 + (i % 17) * 29) % w;
+    const y = (i * 271 + (i % 23) * 13) % h;
+    const alpha = 0.018 + (i % 5) * 0.006;
+    ctx.fillStyle = i % 3 === 0 ? `rgba(232,224,211,${alpha})` : `rgba(10,12,13,${alpha + 0.012})`;
+    ctx.fillRect(x, y, 1 + (i % 4), 1 + ((i + 1) % 2));
   }
+  // Subtle rubbered-in racing lines sit beneath the painted lane marks.
+  ctx.fillStyle = "rgba(12,14,15,0.17)";
+  for (const x of [242, 266, 758, 782]) ctx.fillRect(x, 0, 8, h);
 
-  for (let i = 0; i < 28; i++) {
-    ctx.fillStyle = `rgba(110, 96, 70, ${0.04 + Math.random() * 0.07})`;
-    ctx.fillRect(Math.random() * w, Math.random() * h, 18 + Math.random() * 90, 3 + Math.random() * 10);
-  }
+  ctx.fillStyle = CIRCUIT.pale;
+  ctx.fillRect(36, 0, 9, h);
+  ctx.fillRect(w - 45, 0, 9, h);
+  ctx.fillStyle = CIRCUIT.amber;
+  ctx.fillRect(31, 0, 2, h);
+  ctx.fillRect(w - 33, 0, 2, h);
 
-  ctx.fillStyle = "#f5f6f4";
-  ctx.fillRect(36, 0, 14, h);
-  ctx.fillRect(w - 50, 0, 14, h);
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.fillRect(38, 0, 4, h);
-  ctx.fillRect(w - 44, 0, 4, h);
-
-  const dashW = 12;
-  const dashH = 92;
-  const gap = 78;
-  ctx.fillStyle = "#f7f8f6";
+  const dashW = 10;
+  const dashH = 82;
+  const gap = 86;
+  ctx.fillStyle = "#e7e0d3";
   for (const x of [340, 512, 684]) {
-    for (let y = 18; y < h; y += dashH + gap) {
+    for (let y = 22; y < h; y += dashH + gap) {
       ctx.fillRect(x - dashW / 2, y, dashW, dashH);
     }
+  }
+
+  // Small amber reference ticks keep the road edge readable at speed.
+  ctx.fillStyle = CIRCUIT.amber;
+  for (let y = 0; y < h; y += 168) {
+    ctx.fillRect(20, y + 18, 5, 58);
+    ctx.fillRect(w - 25, y + 18, 5, 58);
   }
 
   return toTexture(el, 8);
 }
 
-/** Green verge variation for roadside banks. */
+/** Muted olive and stone ground, deliberately calm beside the racing surface. */
 export function makeGrassTexture() {
   const { el, ctx } = canvas(512, 512);
-  ctx.fillStyle = "#3a4e2c";
+  ctx.fillStyle = "#343a32";
   ctx.fillRect(0, 0, 512, 512);
-
-  speckle(ctx, 512, 512, 18000, () => {
-    const g = 78 + Math.random() * 72;
-    const r = 38 + Math.random() * 36;
-    const b = 24 + Math.random() * 22;
-    return `rgba(${r},${g},${b},${0.2 + Math.random() * 0.5})`;
-  }, () => [1, 1 + Math.random() * 3]);
-
-  for (let i = 0; i < 90; i++) {
-    ctx.fillStyle = `rgba(${88 + Math.random() * 40},${70 + Math.random() * 28},${38 + Math.random() * 18},${0.16 + Math.random() * 0.28})`;
-    ctx.beginPath();
-    ctx.ellipse(Math.random() * 512, Math.random() * 512, 8 + Math.random() * 28, 4 + Math.random() * 12, Math.random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
+  for (let y = 0; y < 512; y += 64) {
+    ctx.fillStyle = y % 128 === 0 ? "#3a4036" : "#373d34";
+    ctx.fillRect(0, y, 512, 32);
   }
-
-  speckle(ctx, 512, 512, 1600, () => {
-    return `rgba(${150 + Math.random() * 50},${140 + Math.random() * 36},${70 + Math.random() * 20},${0.1 + Math.random() * 0.18})`;
-  }, () => [1, 2 + Math.random() * 4]);
-
-  speckle(ctx, 512, 512, 400, () => `rgba(210, 206, 180, ${0.08 + Math.random() * 0.12})`);
+  ctx.fillStyle = "rgba(168,157,111,0.12)";
+  for (let y = 18; y < 512; y += 64) {
+    ctx.fillRect(20, y, 72, 3);
+    ctx.fillRect(132, y + 12, 46, 3);
+    ctx.fillRect(246, y + 4, 94, 3);
+    ctx.fillRect(390, y + 16, 66, 3);
+  }
+  ctx.fillStyle = "rgba(16,18,16,0.2)";
+  for (let y = 0; y < 512; y += 128) ctx.fillRect(0, y + 58, 512, 6);
 
   return toTexture(el, 4);
 }
 
-/** Drab hillside: olive grass with rock flecks. */
+/** Broad, low-contrast hillside bands with a few readable rock facets. */
 export function makeHillTexture() {
   const { el, ctx } = canvas(512, 512);
   const g = ctx.createLinearGradient(0, 0, 0, 512);
-  g.addColorStop(0, "#5a6048");
-  g.addColorStop(0.45, "#4a523c");
-  g.addColorStop(1, "#3e4634");
+  g.addColorStop(0, "#53574b");
+  g.addColorStop(0.45, "#464a40");
+  g.addColorStop(1, "#343a34");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 512, 512);
-
-  speckle(ctx, 512, 512, 14000, () => {
-    const n = 70 + Math.random() * 40;
-    return `rgba(${n - 8},${n + 8},${n - 18},${0.16 + Math.random() * 0.34})`;
-  }, () => [2 + Math.random() * 5, 1 + Math.random() * 3]);
-
-  for (let i = 0; i < 70; i++) {
-    ctx.fillStyle = `rgba(${110 + Math.random() * 30},${104 + Math.random() * 22},${88 + Math.random() * 16},${0.14 + Math.random() * 0.22})`;
+  ctx.fillStyle = "rgba(16,26,39,0.12)";
+  for (let y = 34; y < 512; y += 92) {
     ctx.beginPath();
-    ctx.arc(Math.random() * 512, Math.random() * 512, 3 + Math.random() * 9, 0, Math.PI * 2);
+    ctx.moveTo(0, y + 24);
+    ctx.lineTo(146, y - 10);
+    ctx.lineTo(302, y + 18);
+    ctx.lineTo(512, y - 8);
+    ctx.lineTo(512, y + 26);
+    ctx.lineTo(0, y + 58);
+    ctx.closePath();
     ctx.fill();
   }
-
-  speckle(ctx, 512, 512, 800, () => `rgba(${90 + Math.random() * 40},${68 + Math.random() * 22},${42},${0.12 + Math.random() * 0.2})`);
+  ctx.fillStyle = "rgba(226,218,202,0.09)";
+  for (const [x, y] of [[52, 92], [352, 170], [180, 336], [438, 420]]) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + 14);
+    ctx.lineTo(x + 24, y);
+    ctx.lineTo(x + 54, y + 17);
+    ctx.lineTo(x + 34, y + 24);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   return toTexture(el, 2);
 }
 
-/** Darker = wetter / glossier under night lights. */
+/** Simple matching roughness mask for asphalt and its painted markings. */
 export function makeRoadRoughness() {
   const w = 1024;
   const h = 1024;
   const { el, ctx } = canvas(w, h);
-  ctx.fillStyle = "#b8b8b8";
+  ctx.fillStyle = "#d0d0d0";
   ctx.fillRect(0, 0, w, h);
-
-  speckle(ctx, w, h, 24000, () => {
-    const n = 140 + Math.random() * 70;
-    return `rgba(${n},${n},${n},${0.12 + Math.random() * 0.22})`;
-  });
-
-  for (const x of [210, 430, 594, 814]) {
-    ctx.fillStyle = "rgba(88, 88, 90, 0.28)";
-    ctx.fillRect(x - 48, 0, 96, h);
-  }
-
-  ctx.fillStyle = "rgba(72, 72, 74, 0.45)";
+  ctx.fillStyle = "#bcbcbc";
+  for (const x of [242, 266, 758, 782]) ctx.fillRect(x, 0, 8, h);
+  ctx.fillStyle = "#777777";
   ctx.fillRect(36, 0, 14, h);
   ctx.fillRect(w - 50, 0, 14, h);
-
-  const dashW = 12;
-  const dashH = 92;
-  const gap = 78;
-  ctx.fillStyle = "rgba(64, 64, 66, 0.5)";
+  ctx.fillStyle = "#8a8a8a";
   for (const x of [340, 512, 684]) {
-    for (let y = 18; y < h; y += dashH + gap) {
-      ctx.fillRect(x - dashW / 2, y, dashW, dashH);
+    for (let y = 22; y < h; y += 168) {
+      ctx.fillRect(x - 5, y, 10, 82);
     }
-  }
-
-  for (let i = 0; i < 10; i++) {
-    ctx.fillStyle = `rgba(70, 70, 72, ${0.18 + Math.random() * 0.22})`;
-    ctx.fillRect(60 + Math.random() * 900, 40 + Math.random() * 940, 24 + Math.random() * 80, 8 + Math.random() * 16);
   }
 
   return toLinearTexture(el, 8);
@@ -244,28 +213,33 @@ export function makeRoadRoughness() {
 
 export function makeKerbTexture() {
   const { el, ctx } = canvas(128, 512);
-  ctx.fillStyle = "#c4beb4";
+  ctx.fillStyle = CIRCUIT.pale;
   ctx.fillRect(0, 0, 128, 512);
 
   for (let y = 0; y < 512; y += 64) {
-    ctx.fillStyle = y % 128 === 0 ? "#d2cdc4" : "#b6b0a6";
-    ctx.fillRect(0, y, 128, 64);
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    ctx.fillRect(0, y, 128, 3);
-    ctx.fillStyle = "rgba(40,36,30,0.22)";
-    ctx.fillRect(0, y + 60, 128, 4);
-    ctx.fillStyle = "rgba(90, 84, 74, 0.18)";
-    ctx.fillRect(96, y + 8, 24, 48);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, y, 38, 64);
+    ctx.clip();
+    ctx.fillStyle = y % 128 === 0 ? "#c8523e" : "#e7a84c";
+    ctx.translate(-14, y);
+    for (let x = -64; x < 96; x += 24) {
+      ctx.beginPath();
+      ctx.moveTo(x, 64);
+      ctx.lineTo(x + 24, 64);
+      ctx.lineTo(x + 56, 0);
+      ctx.lineTo(x + 32, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = "rgba(17,20,22,0.18)";
+    ctx.fillRect(0, y + 58, 128, 6);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(38, y + 4, 90, 2);
   }
-
-  speckle(ctx, 128, 512, 2200, () => `rgba(${90 + Math.random() * 40},${82 + Math.random() * 28},${60},${0.08 + Math.random() * 0.16})`);
-
-  ctx.fillStyle = "#e8c84a";
-  ctx.fillRect(8, 0, 18, 512);
-  ctx.fillStyle = "rgba(255,255,240,0.28)";
-  ctx.fillRect(10, 0, 6, 512);
-  ctx.fillStyle = "rgba(40,32,10,0.2)";
-  ctx.fillRect(22, 0, 4, 512);
+  ctx.fillStyle = CIRCUIT.ink;
+  ctx.fillRect(36, 0, 3, 512);
 
   const tex = toTexture(el, 5);
   tex.wrapS = THREE.RepeatWrapping;
@@ -274,49 +248,35 @@ export function makeKerbTexture() {
 
 export function makeBarrierTexture(label = "HARBOR GP") {
   const { el, ctx } = canvas(256, 1024);
-  ctx.fillStyle = "#b7b2a8";
+  ctx.fillStyle = "#292c2d";
   ctx.fillRect(0, 0, 256, 1024);
 
   for (let y = 0; y < 1024; y += 128) {
-    ctx.fillStyle = y % 256 === 0 ? "#c4bfb4" : "#ada89e";
-    ctx.fillRect(0, y, 256, 128);
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    ctx.fillRect(0, y, 256, 5);
-    ctx.fillStyle = "rgba(40,36,32,0.22)";
-    ctx.fillRect(0, y + 122, 256, 6);
-    ctx.fillStyle = "#8c8880";
+    ctx.fillStyle = y % 256 === 0 ? "#35393a" : "#2e3233";
+    ctx.fillRect(18, y + 5, 220, 118);
+    ctx.fillStyle = "rgba(231,224,211,0.1)";
+    ctx.fillRect(18, y + 5, 220, 4);
+    ctx.fillStyle = "rgba(16,26,39,0.7)";
+    ctx.fillRect(18, y + 118, 220, 5);
+    ctx.fillStyle = "#686d6d";
     ctx.beginPath();
-    ctx.arc(36, y + 64, 5, 0, Math.PI * 2);
-    ctx.arc(220, y + 64, 5, 0, Math.PI * 2);
+    ctx.arc(34, y + 64, 4, 0, Math.PI * 2);
+    ctx.arc(222, y + 64, 4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(20,18,16,0.35)";
+    ctx.fillStyle = CIRCUIT.ink;
     ctx.beginPath();
-    ctx.arc(36, y + 64, 2, 0, Math.PI * 2);
-    ctx.arc(220, y + 64, 2, 0, Math.PI * 2);
+    ctx.arc(34, y + 64, 1.5, 0, Math.PI * 2);
+    ctx.arc(222, y + 64, 1.5, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  speckle(ctx, 256, 1024, 5000, () => {
-    const n = 90 + Math.random() * 50;
-    return `rgba(${n},${n - 6},${n - 16},${0.08 + Math.random() * 0.16})`;
-  });
-
-  for (let i = 0; i < 18; i++) {
-    ctx.fillStyle = `rgba(70, 62, 48, ${0.06 + Math.random() * 0.12})`;
-    ctx.fillRect(Math.random() * 200, Math.random() * 1024, 20 + Math.random() * 80, 8 + Math.random() * 40);
-  }
-
-  ctx.fillStyle = "#d9a012";
-  ctx.fillRect(0, 0, 18, 1024);
-  ctx.fillRect(238, 0, 18, 1024);
-  ctx.fillStyle = "rgba(20,18,14,0.35)";
-  ctx.fillRect(18, 0, 4, 1024);
-  ctx.fillRect(234, 0, 4, 1024);
+  ctx.fillStyle = CIRCUIT.amber;
+  ctx.fillRect(0, 0, 6, 1024);
+  ctx.fillRect(250, 0, 6, 1024);
 
   ctx.save();
   ctx.translate(128, 512);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillStyle = "rgba(48, 46, 42, 0.42)";
+  ctx.fillStyle = "rgba(231,224,211,0.76)";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   fitText(ctx, label, 900, 700, 28, 16);
@@ -328,19 +288,14 @@ export function makeBarrierTexture(label = "HARBOR GP") {
 
 export function makeCarbonTexture() {
   const { el, ctx } = canvas(64, 64);
-  ctx.fillStyle = "#1c1e22";
+  ctx.fillStyle = CIRCUIT.ink;
   ctx.fillRect(0, 0, 64, 64);
-  ctx.strokeStyle = "rgba(110, 116, 124, 0.28)";
-  ctx.lineWidth = 1;
-  for (let i = -64; i < 64; i += 4) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i + 64, 64);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(i + 64, 0);
-    ctx.lineTo(i, 64);
-    ctx.stroke();
+  ctx.fillStyle = "#203346";
+  for (let y = 0; y < 64; y += 8) {
+    for (let x = 0; x < 64; x += 8) {
+      if (((x + y) / 8) % 2 === 0) ctx.fillRect(x, y, 4, 4);
+      else ctx.fillRect(x + 4, y + 4, 4, 4);
+    }
   }
   const tex = new THREE.CanvasTexture(el);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -356,53 +311,28 @@ export function makeBuildingTexture(accent: string) {
   return makeFacadeAtlas(accent);
 }
 
-/** Daytime office / apartment facade — mixed occupancy, not a neon grid. */
+/** Simple repeatable window rhythm for distant urban silhouettes. */
 export function makeFacadeAtlas(accent: string) {
   const { el, ctx } = canvas(512, 1024);
-  ctx.fillStyle = "#c8c2b6";
+  ctx.fillStyle = "#172638";
   ctx.fillRect(0, 0, 512, 1024);
-  ctx.fillStyle = "#b7b1a6";
-  ctx.fillRect(0, 0, 512, 40);
+  ctx.fillStyle = "#24394b";
+  ctx.fillRect(0, 0, 512, 32);
+  ctx.fillRect(0, 988, 512, 36);
   ctx.fillStyle = accent;
-  ctx.globalAlpha = 0.22;
-  ctx.fillRect(0, 0, 512, 10);
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(0, 32, 512, 8);
   ctx.globalAlpha = 1;
-
-  let y = 52;
-  let row = 0;
-  while (y < 990) {
-    const floorH = 28 + (row % 5 === 0 ? 8 : 0);
-    let x = 14;
-    while (x < 498) {
-      const colW = 18 + ((x + row * 13) % 17);
-      const w = Math.min(colW, 498 - x);
-      const roll = (x * 17 + y * 31) % 100;
-      ctx.fillStyle = "#9aa8b4";
-      ctx.fillRect(x, y, w - 3, floorH - 8);
-      ctx.fillStyle = "rgba(255,255,255,0.22)";
-      ctx.fillRect(x + 1, y + 1, Math.max(3, (w - 3) * 0.35), 5);
-
-      if (roll > 78) {
-        ctx.fillStyle = "rgba(28, 34, 42, 0.72)";
-        ctx.fillRect(x + 1, y + 2, w - 5, floorH - 12);
-      } else if (roll > 62) {
-        ctx.fillStyle = "rgba(255, 232, 186, 0.55)";
-        ctx.fillRect(x + 1, y + 2, w - 5, floorH - 12);
-        ctx.fillStyle = "rgba(255, 248, 220, 0.28)";
-        ctx.fillRect(x + 2, y + 3, 5, 6);
-      } else if (roll > 48) {
-        ctx.fillStyle = "rgba(70, 90, 108, 0.35)";
-        ctx.fillRect(x + 2, y + 4, w - 8, Math.floor((floorH - 14) * 0.55));
-      } else {
-        ctx.fillStyle = "rgba(180, 206, 224, 0.28)";
-        ctx.fillRect(x + 1, y + 2, w - 5, floorH - 12);
-      }
-      x += w + 4;
+  for (let row = 0, y = 52; y < 972; row++, y += 48) {
+    ctx.fillStyle = row % 4 === 0 ? "#314a5d" : "#263c50";
+    ctx.fillRect(0, y + 34, 512, 3);
+    for (let col = 0, x = 20; x < 490; col++, x += 58) {
+      const lit = (row * 7 + col * 11) % 9;
+      ctx.fillStyle = lit < 2 ? CIRCUIT.amber : lit < 6 ? "#54bdd0" : "#30485b";
+      ctx.fillRect(x, y, 36, 25);
+      ctx.fillStyle = "rgba(220,232,240,0.16)";
+      ctx.fillRect(x, y, 36, 3);
     }
-    ctx.fillStyle = "rgba(90, 86, 78, 0.18)";
-    ctx.fillRect(0, y + floorH - 6, 512, 3);
-    y += floorH + 4;
-    row++;
   }
 
   const tex = new THREE.CanvasTexture(el);
@@ -416,29 +346,23 @@ export function makeFacadeAtlas(accent: string) {
 
 export function makeSlabFacade(accent: string) {
   const { el, ctx } = canvas(512, 512);
-  ctx.fillStyle = "#d0ccc4";
+  ctx.fillStyle = "#1d3041";
   ctx.fillRect(0, 0, 512, 512);
   ctx.fillStyle = accent;
-  ctx.globalAlpha = 0.28;
-  ctx.fillRect(0, 0, 10, 512);
-  ctx.fillRect(502, 0, 10, 512);
+  ctx.globalAlpha = 0.78;
+  ctx.fillRect(0, 0, 12, 512);
+  ctx.fillRect(500, 0, 12, 512);
   ctx.globalAlpha = 1;
 
-  for (let y = 18; y < 500; y += 36) {
-    ctx.fillStyle = "#8fa0ae";
-    ctx.fillRect(22, y, 468, 14);
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.fillRect(22, y, 468, 3);
-    const lit = (y * 7) % 100;
-    if (lit > 70) {
-      ctx.fillStyle = "rgba(255, 230, 180, 0.4)";
-      ctx.fillRect(40 + (y % 80), y + 2, 90 + (y % 40), 10);
-    } else if (lit > 40) {
-      ctx.fillStyle = "rgba(40, 50, 60, 0.28)";
-      ctx.fillRect(60 + (y % 50), y + 2, 120, 10);
+  for (let y = 18, row = 0; y < 500; y += 36, row++) {
+    ctx.fillStyle = "#30485b";
+    ctx.fillRect(22, y + 17, 468, 8);
+    for (let x = 36, col = 0; x < 480; x += 72, col++) {
+      ctx.fillStyle = (row + col * 2) % 7 < 2 ? CIRCUIT.amber : "#4fb5c8";
+      ctx.fillRect(x, y, 54, 13);
+      ctx.fillStyle = "rgba(220,232,240,0.18)";
+      ctx.fillRect(x, y, 54, 2);
     }
-    ctx.fillStyle = "rgba(90, 86, 80, 0.16)";
-    ctx.fillRect(18, y + 22, 476, 2);
   }
 
   const tex = new THREE.CanvasTexture(el);
@@ -452,22 +376,25 @@ export function makeSlabFacade(accent: string) {
 
 export function makeShedTexture() {
   const { el, ctx } = canvas(256, 256);
-  ctx.fillStyle = "#9a9084";
+  ctx.fillStyle = "#1b2d3d";
   ctx.fillRect(0, 0, 256, 256);
-  for (let x = 0; x < 256; x += 14) {
-    ctx.fillStyle = x % 28 === 0 ? "#a89e90" : "#8c8276";
-    ctx.fillRect(x, 0, 12, 256);
-    ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.fillStyle = "#263e50";
+  for (let x = 0; x < 256; x += 32) {
+    ctx.fillRect(x, 0, 27, 256);
+    ctx.fillStyle = "rgba(220,232,240,0.12)";
     ctx.fillRect(x, 0, 3, 256);
-    ctx.fillStyle = "rgba(40,32,24,0.16)";
-    ctx.fillRect(x + 10, 0, 2, 256);
+    ctx.fillStyle = "#263e50";
   }
-  ctx.fillStyle = "rgba(70, 90, 104, 0.7)";
-  ctx.fillRect(28, 96, 48, 64);
-  ctx.fillStyle = "rgba(255, 236, 190, 0.22)";
-  ctx.fillRect(32, 100, 18, 20);
-  ctx.fillStyle = "rgba(40, 36, 32, 0.45)";
-  ctx.fillRect(168, 140, 42, 52);
+  ctx.fillStyle = "#102333";
+  ctx.fillRect(24, 92, 66, 72);
+  ctx.fillStyle = "#4fb5c8";
+  ctx.fillRect(30, 98, 24, 25);
+  ctx.fillStyle = CIRCUIT.amber;
+  ctx.fillRect(60, 98, 24, 25);
+  ctx.fillStyle = "#0e1b29";
+  ctx.fillRect(165, 132, 48, 60);
+  ctx.fillStyle = CIRCUIT.cyan;
+  ctx.fillRect(165, 132, 48, 5);
   const tex = new THREE.CanvasTexture(el);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -477,26 +404,22 @@ export function makeShedTexture() {
 
 export function makeGravelTexture() {
   const { el, ctx } = canvas(512, 512);
-  ctx.fillStyle = "#8a7e6c";
+  ctx.fillStyle = "#35434b";
   ctx.fillRect(0, 0, 512, 512);
-
-  speckle(ctx, 512, 512, 9000, () => {
-    const n = 70 + Math.random() * 50;
-    const warm = Math.random() > 0.45;
-    return warm
-      ? `rgba(${n + 28},${n + 12},${n - 8},${0.22 + Math.random() * 0.35})`
-      : `rgba(${n},${n - 4},${n - 10},${0.2 + Math.random() * 0.32})`;
-  }, () => [1 + Math.random() * 3, 1 + Math.random() * 2]);
-
-  for (let i = 0; i < 220; i++) {
-    const n = 96 + Math.random() * 40;
-    ctx.fillStyle = `rgba(${n + 10},${n},${n - 12},${0.28 + Math.random() * 0.3})`;
-    ctx.beginPath();
-    ctx.arc(Math.random() * 512, Math.random() * 512, 1.2 + Math.random() * 2.8, 0, Math.PI * 2);
-    ctx.fill();
+  for (let y = 0; y < 512; y += 64) {
+    ctx.fillStyle = y % 128 === 0 ? "#3d4d56" : "#394850";
+    ctx.fillRect(0, y, 512, 32);
+    ctx.fillStyle = "rgba(220,232,240,0.08)";
+    ctx.fillRect(0, y + 32, 512, 2);
   }
-
-  speckle(ctx, 512, 512, 400, () => `rgba(58, 72, 40, ${0.1 + Math.random() * 0.16})`);
+  ctx.fillStyle = "#71818a";
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 10; col++) {
+      const x = col * 56 + ((row % 2) * 18) + 8;
+      const y = row * 64 + 44;
+      ctx.fillRect(x, y, 8 + (col % 3) * 3, 3);
+    }
+  }
 
   return toTexture(el, 4);
 }
@@ -510,21 +433,21 @@ export function makeBillboardTexture(
   const w = 1024;
   const h = 512;
   const { el, ctx } = canvas(w, h);
-  highwayFace(ctx, w, h, "#0d5c3a");
+  highwayFace(ctx, w, h);
   ctx.fillStyle = color;
-  ctx.fillRect(28, 28, 18, h - 56);
-  ctx.fillRect(w - 46, 28, 18, h - 56);
+  ctx.fillRect(32, 32, 14, h - 64);
+  ctx.fillRect(w - 46, 32, 14, h - 64);
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "#f4f7f2";
+  ctx.fillStyle = CIRCUIT.pale;
   fitText(ctx, title, 860, 800, 86, 36);
   ctx.fillText(title, w / 2, 220);
 
-  ctx.fillStyle = "#d5eadc";
+  ctx.fillStyle = CIRCUIT.cyan;
   fitText(ctx, kicker, 860, 650, 28, 16);
   ctx.fillText(kicker, w / 2, 300);
 
-  ctx.fillStyle = "#b7d4c4";
+  ctx.fillStyle = "#9aafbd";
   fitText(ctx, footer, 860, 600, 22, 14);
   ctx.fillText(footer, w / 2, 400);
   return toSignTexture(el);
@@ -534,12 +457,12 @@ export function makeGantrySign(label: string, sub = "HARBOR GP  ·  MIDNIGHT CUP
   const w = 1024;
   const h = 288;
   const { el, ctx } = canvas(w, h);
-  highwayFace(ctx, w, h, "#0d5c3a");
+  highwayFace(ctx, w, h);
   ctx.textAlign = "center";
-  ctx.fillStyle = "#f4f7f2";
+  ctx.fillStyle = CIRCUIT.pale;
   fitText(ctx, label, 900, 800, 72, 28);
   ctx.fillText(label, w / 2, 150);
-  ctx.fillStyle = "#c5ddcf";
+  ctx.fillStyle = CIRCUIT.cyan;
   fitText(ctx, sub, 900, 650, 26, 14);
   ctx.fillText(sub, w / 2, 214);
   return toSignTexture(el);
@@ -549,12 +472,12 @@ export function makeDistanceBoard(meters: string, sub = "HARBOR GP") {
   const w = 512;
   const h = 384;
   const { el, ctx } = canvas(w, h);
-  highwayFace(ctx, w, h, "#0d5c3a");
+  highwayFace(ctx, w, h);
   ctx.textAlign = "center";
-  ctx.fillStyle = "#f4f7f2";
+  ctx.fillStyle = CIRCUIT.pale;
   fitText(ctx, meters, 420, 800, 148, 48);
   ctx.fillText(meters, w / 2, 210);
-  ctx.fillStyle = "#d5eadc";
+  ctx.fillStyle = CIRCUIT.cyan;
   fitText(ctx, sub, 400, 700, 28, 16);
   ctx.fillText(sub, w / 2, 292);
   return toSignTexture(el);
@@ -564,13 +487,13 @@ export function makeMarshalBoard(mode: "clear" | "hold", sub = "VOLTAGE CIRCUIT"
   const w = 384;
   const h = 320;
   const { el, ctx } = canvas(w, h);
-  const fill = mode === "clear" ? "#0d5c3a" : "#8a6a12";
+  const fill = mode === "clear" ? "#173948" : "#49371e";
   highwayFace(ctx, w, h, fill);
   ctx.textAlign = "center";
-  ctx.fillStyle = "#f4f7f2";
+  ctx.fillStyle = CIRCUIT.pale;
   fitText(ctx, mode === "clear" ? "CLEAR" : "HOLD", 300, 800, 64, 28);
   ctx.fillText(mode === "clear" ? "CLEAR" : "HOLD", w / 2, 168);
-  ctx.fillStyle = mode === "clear" ? "#d5eadc" : "#f0e6c0";
+  ctx.fillStyle = mode === "clear" ? CIRCUIT.cyan : CIRCUIT.amber;
   fitText(ctx, sub, 300, 650, 22, 14);
   ctx.fillText(sub, w / 2, 226);
   return toSignTexture(el);

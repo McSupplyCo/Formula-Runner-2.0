@@ -14,7 +14,7 @@
   </head>
   <body>
     <a class="skip" href="#play">Skip to race</a>
-    <div id="app" class="app" data-panel="title">
+    <div id="app" class="app" data-panel="title" inert aria-hidden="true">
       <aside id="shell" class="rail">
         <div class="rail-head">
           <header class="brand">
@@ -104,7 +104,7 @@
           <button id="closeGarage" class="ghost rail-back" type="button">Back to grid</button>
         </section>
 
-        <section id="results" class="panel hidden">
+        <section id="results" class="panel hidden" role="tabpanel" aria-label="Race results">
           <div class="tab-pane is-active">
             <p class="kicker" id="resultBest">Chequered</p>
             <div class="debrief-cluster cluster">
@@ -197,13 +197,13 @@
           <div id="combo" class="combo" aria-live="polite"></div>
         </section>
         <div id="countdown" class="countdown cluster hidden">3</div>
-        <section id="pause" class="stage-modal hidden">
+        <section id="pause" class="stage-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseHeading">
           <div class="modal cluster">
             <p class="kicker">Hold</p>
             <div class="hold-readout">
               <b aria-hidden="true">II</b>
               <div>
-                <h2>Paused</h2>
+                <h2 id="pauseHeading">Paused</h2>
                 <small>ESC</small>
               </div>
             </div>
@@ -233,6 +233,14 @@
         </div>
       </div>
     </div>
+    <section id="saveSession" class="save-session" role="status" aria-live="polite" aria-labelledby="saveSessionHeading">
+      <div class="save-session-card">
+        <p class="kicker">Formula Runner</p>
+        <h1 id="saveSessionHeading">Checking save access</h1>
+        <p id="saveSessionMessage">Making sure another Formula Runner tab is not using this save.</p>
+        <small>This protects credits, upgrades, and race history from being overwritten.</small>
+      </div>
+    </section>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

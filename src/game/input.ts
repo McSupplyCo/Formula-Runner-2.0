@@ -5,6 +5,23 @@ export type InputState = {
   pause: boolean;
 };
 
+export function keyboardSteer(left: boolean, right: boolean): number {
+  return Number(left) - Number(right);
+}
+
+export function pointerSteer(originX: number, clientX: number, span: number): number {
+  return Math.max(-1, Math.min(1, (originX - clientX) / Math.max(110, span)));
+}
+
+function keyboardIsInUiControl(code: string) {
+  const active = document.activeElement;
+  if (!(active instanceof Element)) return false;
+  if ((code === "Escape" || code === "KeyP") && active.closest("button")) return false;
+  return Boolean(active.closest(
+    'button, input, textarea, select, a[href], [contenteditable="true"], [role="textbox"], [role="combobox"], [role="listbox"], [role="slider"], [role="spinbutton"]',
+  ));
+}
+
 export class InputController {
   steer = 0;
   brake = 0;
@@ -23,6 +40,7 @@ export class InputController {
     this.bound = true;
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
+    window.addEventListener("blur", this.onBlur);
     canvas.addEventListener("pointerdown", this.onPointerDown);
     window.addEventListener("pointermove", this.onPointerMove);
     window.addEventListener("pointerup", this.onPointerUp);
@@ -33,6 +51,7 @@ export class InputController {
   detach(canvas: HTMLElement) {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
+    window.removeEventListener("blur", this.onBlur);
     canvas.removeEventListener("pointerdown", this.onPointerDown);
     window.removeEventListener("pointermove", this.onPointerMove);
     window.removeEventListener("pointerup", this.onPointerUp);
@@ -49,6 +68,16 @@ export class InputController {
     this.boostHeld = down;
   }
 
+  private onBlur = () => {
+    this.keys.clear();
+    this.pointerId = null;
+    this.pointerSteer = 0;
+    this.brake = 0;
+    this.boostHeld = false;
+    this.boostPressed = false;
+    this.pausePressed = false;
+  };
+
   consume(): InputState {
     const state: InputState = {
       steer: this.currentSteer(),
@@ -62,14 +91,19 @@ export class InputController {
   }
 
   private currentSteer() {
-    let keyboard = 0;
-    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) keyboard -= 1;
-    if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) keyboard += 1;
+    const left = this.keys.has("KeyA") || this.keys.has("ArrowLeft");
+    const right = this.keys.has("KeyD") || this.keys.has("ArrowRight");
     if (this.pointerId !== null) return this.pointerSteer;
-    return keyboard;
+    return keyboardSteer(left, right);
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
+    // Let controls keep their native keyboard behavior (Space activates buttons,
+    // arrows move carets/options, and typing never steers or boosts the car).
+    if (keyboardIsInUiControl(event.code)) {
+      this.keys.delete(event.code);
+      return;
+    }
     if (event.repeat && (event.code === "Space" || event.code === "Escape")) return;
     this.keys.add(event.code);
     if (event.code === "Space" || event.code === "ShiftLeft" || event.code === "ShiftRight") {
@@ -96,7 +130,7 @@ export class InputController {
   private onPointerMove = (event: PointerEvent) => {
     if (this.pointerId !== event.pointerId) return;
     const span = Math.max(110, window.innerWidth * 0.16);
-    this.pointerSteer = Math.max(-1, Math.min(1, (event.clientX - this.pointerOriginX) / span));
+    this.pointerSteer = pointerSteer(this.pointerOriginX, event.clientX, span);
   };
 
   private onPointerUp = (event: PointerEvent) => {

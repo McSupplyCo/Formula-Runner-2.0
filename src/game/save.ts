@@ -49,6 +49,12 @@ export type SaveData = {
 };
 
 const SETTLED_CAP = 24;
+let saveWritesEnabled = false;
+
+/** Save mutations are only enabled after this tab owns the exclusive save lock. */
+export function setSaveWritesEnabled(enabled: boolean) {
+  saveWritesEnabled = enabled;
+}
 
 export const defaultSave = (): SaveData => ({
   version: SAVE_VERSION,
@@ -78,8 +84,8 @@ export const defaultSave = (): SaveData => ({
 
 /**
  * Covers credits, ranks, owned cars, and paint. Cosmetics (trail/rim/number/glow) and
- * world/HUD picks stay out of the body on purpose: they cost nothing, and widening
- * the body would invalidate every already-written save of this same version.
+ * world/HUD picks stay out of the body on purpose: they cost nothing. The replay
+ * ledger is included so accidental corruption cannot erase run-idempotency data.
  */
 export function fingerprint(save: Omit<SaveData, "checksum"> | SaveData): string {
   const ranks = CARS.map((car) => {
@@ -90,7 +96,25 @@ export function fingerprint(save: Omit<SaveData, "checksum"> | SaveData): string
     const row = save.garage[car.id];
     return row ? `${row.primary}.${row.secondary}.${row.accent}.${row.livery}` : car.id;
   }).join("|");
+  const body = `${Math.floor(save.credits)}|${save.ownedCars.join(",")}|${ranks}|${Math.floor(save.bestDistance)}|${save.hudSpeedSide}|${save.lastRewardRunId}|${paints}|${save.settledRunIds.join(",")}`;
+  return hashBody(body);
+}
+
+/** Fingerprint emitted by v4 saves, whose checksum did not cover the replay ledger. */
+export function legacyV4Fingerprint(save: Omit<SaveData, "checksum"> | SaveData): string {
+  const ranks = CARS.map((car) => {
+    const row = save.garage[car.id];
+    return row ? `${car.id}:${row.engine}.${row.tires}.${row.turbo}.${row.aero}` : car.id;
+  }).join("|");
+  const paints = CARS.map((car) => {
+    const row = save.garage[car.id];
+    return row ? `${row.primary}.${row.secondary}.${row.accent}.${row.livery}` : car.id;
+  }).join("|");
   const body = `${Math.floor(save.credits)}|${save.ownedCars.join(",")}|${ranks}|${Math.floor(save.bestDistance)}|${save.hudSpeedSide}|${save.lastRewardRunId}|${paints}`;
+  return hashBody(body);
+}
+
+function hashBody(body: string): string {
   let hash = 2166136261;
   for (let i = 0; i < body.length; i++) {
     hash ^= body.charCodeAt(i);
@@ -192,8 +216,10 @@ export function checksumMatches(raw: unknown): boolean {
   if (!raw || typeof raw !== "object") return false;
   const data = raw as Record<string, unknown>;
   if (typeof data.checksum !== "string" || !data.checksum) return true;
+  const migrated = migrateSave(data);
+  if (data.version === 4) return legacyV4Fingerprint(migrated) === data.checksum;
   if (data.version !== SAVE_VERSION) return true;
-  return migrateSave(data).checksum === data.checksum;
+  return migrated.checksum === data.checksum;
 }
 
 export function hasStoredSave(): boolean {
@@ -221,6 +247,7 @@ function readSlot(key: string): unknown {
 }
 
 export function writeSave(save: SaveData): boolean {
+  if (!saveWritesEnabled) return false;
   const payload = JSON.stringify(withChecksum(save));
   try {
     const previous = localStorage.getItem(SAVE_KEY);

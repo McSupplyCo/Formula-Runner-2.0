@@ -31,10 +31,17 @@ describe("economy pacing", () => {
     expect(spent.maxedParts).toBe(0);
   });
 
-  it("still cannot complete two trees after a doubled legendary payout", () => {
+  it("keeps a doubled legendary payout below even one gated tree", () => {
     const doubled = Math.min(CREDIT.maxPayout, payoutFor("legendary")) * 2;
-    expect(doubled).toBeLessThan(treeCost() * 2);
-    expect(greedySpend(doubled).maxedParts).toBeLessThan(2);
+    const oneTreeWithPrerequisites = treeCost() + 3 * treeCost(5);
+    const twoTreesWithPrerequisites = 2 * treeCost() + 2 * treeCost(5);
+    expect([payoutFor("short"), payoutFor("average"), payoutFor("excellent"), payoutFor("legendary")]).toEqual([76, 166, 484, 900]);
+    expect(oneTreeWithPrerequisites).toBe(3771);
+    expect(twoTreesWithPrerequisites).toBe(5578);
+    expect(doubled).toBe(1800);
+    expect(doubled).toBeLessThan(oneTreeWithPrerequisites);
+    expect(doubled).toBeLessThan(twoTreesWithPrerequisites);
+    expect(greedySpend(doubled).maxedParts).toBe(0);
   });
 
   it("caps payout so hacked distance cannot mint a tree", () => {

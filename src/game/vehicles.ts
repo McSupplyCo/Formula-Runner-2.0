@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { makeCarbonTexture } from "./textures";
+import type { CarId } from "./tuning";
 
 const shared: Record<string, THREE.Material> = {};
 let carbonMap: THREE.CanvasTexture | null = null;
@@ -108,7 +109,7 @@ function caliper() {
 }
 
 function wishboneMat() {
-  return mat("wishbone", { color: 0x2a323c, metalness: 0.75, roughness: 0.32 });
+  return mat("wishbone", { color: 0x53606b, metalness: 0.72, roughness: 0.31 });
 }
 
 function glass() {
@@ -119,16 +120,6 @@ function glass() {
     envMapIntensity: 1.35,
     transparent: true,
     opacity: 0.82,
-  });
-}
-
-function headlamp() {
-  return mat("headlamp", {
-    color: 0xf4fbff,
-    emissive: 0xfff6e0,
-    emissiveIntensity: 1.35,
-    roughness: 0.15,
-    metalness: 0.2,
   });
 }
 
@@ -234,19 +225,67 @@ const wishDir = new THREE.Vector3();
 function wishbone(parent: THREE.Group, ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
   wishDir.set(bx - ax, by - ay, bz - az);
   const len = wishDir.length();
-  const rod = mesh(new THREE.CylinderGeometry(0.016, 0.016, len, 6), wishboneMat());
+  const rod = mesh(new THREE.CylinderGeometry(0.024, 0.024, len, 7), wishboneMat());
   rod.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
   rod.quaternion.setFromUnitVectors(yAxis, wishDir.normalize());
   parent.add(rod);
 }
 
-function addHeadlights(parent: THREE.Group, y: number, z: number, spread = 0.18) {
-  for (const x of [-spread, spread]) {
-    const light = new THREE.SpotLight(0xfff1d2, 4.8, 28, 0.4, 0.65, 1.7);
-    light.position.set(x, y, z);
-    light.target.position.set(x * 1.6, -0.55, z + 12);
-    parent.add(light, light.target);
+type LoftStation = [z: number, x: number, y: number, halfWidth: number, halfHeight: number];
+
+/** A compact superelliptic loft gives the player car a continuous, tapered shell. */
+function loft(stations: LoftStation[], material: THREE.Material, segments = 16) {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (const [z, x, y, halfWidth, halfHeight] of stations) {
+    for (let i = 0; i < segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      const px = Math.sign(c) * Math.pow(Math.abs(c), 0.76) * halfWidth;
+      const py = Math.sign(s) * Math.pow(Math.abs(s), 0.76) * halfHeight;
+      positions.push(x + px, y + py, z);
+    }
   }
+  for (let row = 0; row < stations.length - 1; row++) {
+    for (let i = 0; i < segments; i++) {
+      const a = row * segments + i;
+      const b = row * segments + ((i + 1) % segments);
+      const c = (row + 1) * segments + i;
+      const d = (row + 1) * segments + ((i + 1) % segments);
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return mesh(geometry, material);
+}
+
+function haloBar(parent: THREE.Group, points: THREE.Vector3[], material: THREE.Material, radius = 0.032) {
+  const curve = new THREE.CatmullRomCurve3(points);
+  parent.add(mesh(new THREE.TubeGeometry(curve, 16, radius, 7, false), material));
+}
+
+/** Cambered wing section extruded across the car instead of a blunt box. */
+function wingPlane(width: number, depth: number, thickness: number, material: THREE.Material) {
+  const section = new THREE.Shape();
+  section.moveTo(-depth * 0.5, -thickness * 0.34);
+  section.quadraticCurveTo(-depth * 0.1, thickness * 0.72, depth * 0.34, thickness * 0.34);
+  section.lineTo(depth * 0.5, 0);
+  section.quadraticCurveTo(depth * 0.02, -thickness * 0.12, -depth * 0.5, -thickness * 0.34);
+  const geometry = new THREE.ExtrudeGeometry(section, {
+    depth: width,
+    bevelEnabled: true,
+    bevelThickness: Math.min(0.014, thickness * 0.16),
+    bevelSize: Math.min(0.016, thickness * 0.18),
+    bevelSegments: 1,
+    curveSegments: 4,
+  });
+  geometry.translate(0, 0, -width / 2);
+  geometry.rotateY(Math.PI / 2);
+  return mesh(geometry, material);
 }
 
 /**
@@ -259,10 +298,12 @@ export function createFormulaCar(
   body: number,
   accent: number,
   secondary?: number,
-  opts?: { rim?: number; number?: number; glow?: number },
+  opts?: { rim?: number; number?: number; glow?: number; variant?: CarId },
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = "formula";
+  const variant = opts?.variant ?? "apex";
+  group.userData.carStyle = variant;
   const rimMat = typeof opts?.rim === "number" ? rimPaint(opts.rim >>> 0) : undefined;
 
   const coat = paint(body, 0.24);
@@ -270,11 +311,7 @@ export function createFormulaCar(
   const neon = accentCoat(accent);
   const dark = (carbon() as THREE.MeshStandardMaterial).clone();
   dark.envMapIntensity = 1.05;
-  const plankMat = new THREE.MeshStandardMaterial({
-    color: 0x6a5420,
-    roughness: 0.62,
-    metalness: 0.25,
-  });
+  const plankMat = mat("plank", { color: 0x403a32, roughness: 0.62, metalness: 0.25 });
   const rainMat = new THREE.MeshStandardMaterial({
     color: 0xff2230,
     emissive: 0xff1020,
@@ -294,27 +331,14 @@ export function createFormulaCar(
 
   group.add(contactShadow(1.9, 4.1));
 
-  const floor = mesh(new RoundedBoxGeometry(1.58, 0.055, 3.42, 2, 0.04), dark);
-  floor.position.set(0, 0.145, 0.02);
+  // Flat floor and a single keel give the silhouette a clear ground plane without
+  // the layered stack of box panels used by the previous model.
+  const floor = mesh(new RoundedBoxGeometry(1.46, 0.045, 3.36, 2, 0.035), dark);
+  floor.position.set(0, 0.155, 0.02);
   group.add(floor);
-  const floorLip = mesh(new THREE.BoxGeometry(1.62, 0.018, 3.36), coat);
-  floorLip.position.set(0, 0.175, 0.02);
-  group.add(floorLip);
-  for (const x of [-0.78, 0.78]) {
-    const edge = mesh(new THREE.BoxGeometry(0.07, 0.055, 3.05), coat);
-    edge.position.set(x, 0.172, 0.06);
-    group.add(edge);
-  }
-  const plank = mesh(new THREE.BoxGeometry(0.3, 0.032, 2.28), plankMat);
-  plank.position.set(0, 0.108, 0.12);
+  const plank = mesh(new THREE.BoxGeometry(0.24, 0.024, 2.36), plankMat);
+  plank.position.set(0, 0.119, 0.04);
   group.add(plank);
-  for (const x of [-0.72, 0.72]) {
-    for (const z of [0.72, 0.18, -0.38]) {
-      const fence = mesh(new THREE.BoxGeometry(0.014, 0.09, 0.32), dark);
-      fence.position.set(x, 0.2, z);
-      group.add(fence);
-    }
-  }
 
   if (typeof opts?.glow === "number" && Number.isFinite(opts.glow) && (opts.glow >>> 0) > 0x222222) {
     const glowMat = new THREE.MeshBasicMaterial({
@@ -325,222 +349,130 @@ export function createFormulaCar(
       depthWrite: false,
       toneMapped: false,
     });
-    const underglow = mesh(new RoundedBoxGeometry(1.4, 0.02, 3.0, 1, 0.04), glowMat);
+    const underglow = mesh(new RoundedBoxGeometry(1.34, 0.02, 3.0, 1, 0.04), glowMat);
     underglow.position.set(0, 0.08, 0.04);
     group.add(underglow);
-    for (const x of [-0.52, 0.52]) {
-      const podGlow = mesh(new THREE.BoxGeometry(0.36, 0.018, 1.2), glowMat);
+    for (const x of [-0.55, 0.55]) {
+      const podGlow = mesh(new THREE.BoxGeometry(0.24, 0.018, 1.05), glowMat);
       podGlow.position.set(x, 0.08, -0.1);
       group.add(podGlow);
     }
   }
+  // Main chassis, nose and engine cover share a single shaped shell. In chase view
+  // this creates an unmistakable taper instead of a series of disconnected slabs.
+  group.add(loft([
+    [2.42, 0, 0.29, 0.035, 0.055], [2.16, 0, 0.31, 0.095, 0.09],
+    [1.72, 0, 0.34, 0.15, 0.12], [1.12, 0, 0.39, 0.23, 0.16],
+    [0.56, 0, 0.43, 0.34, 0.2], [0.12, 0, 0.44, 0.4, 0.22],
+    [-0.52, 0, 0.45, 0.38, 0.2], [-1.12, 0, 0.4, 0.32, 0.19],
+    [-1.66, 0, 0.36, 0.19, 0.14], [-1.82, 0, 0.35, 0.12, 0.1],
+  ], coat, 18));
 
-  const tub = mesh(new RoundedBoxGeometry(0.72, 0.34, 1.68, 3, 0.08), coat);
-  tub.position.set(0, 0.4, 0.16);
-  group.add(tub);
-
-  const nosePts = [
-    new THREE.Vector2(0.025, 0),
-    new THREE.Vector2(0.05, 0.14),
-    new THREE.Vector2(0.09, 0.42),
-    new THREE.Vector2(0.15, 0.92),
-    new THREE.Vector2(0.22, 1.42),
-    new THREE.Vector2(0.2, 1.68),
-  ];
-  const nose = mesh(new THREE.LatheGeometry(nosePts, 16), coat);
-  nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, 0.33, 0.95);
-  group.add(nose);
-
-  const tip = mesh(new RoundedBoxGeometry(0.14, 0.075, 0.4, 2, 0.02), dark);
-  tip.position.set(0, 0.265, 2.46);
-  group.add(tip);
-  const camera = mesh(new THREE.BoxGeometry(0.06, 0.045, 0.08), dark);
-  camera.position.set(0, 0.36, 2.32);
+  const noseLine = mesh(new THREE.BoxGeometry(0.026, 0.018, 1.9), neon);
+  noseLine.position.set(0, 0.52, 1.08);
+  group.add(noseLine);
+  const camera = mesh(new RoundedBoxGeometry(0.07, 0.05, 0.075, 1, 0.016), dark);
+  camera.position.set(0, 0.56, 2.24);
   group.add(camera);
-  const camStripe = mesh(new THREE.BoxGeometry(0.018, 0.012, 0.09), neon);
-  camStripe.position.set(0, 0.385, 2.32);
-  group.add(camStripe);
 
-  for (const x of [-0.54, 0.54]) {
-    const inletShoulder = mesh(new RoundedBoxGeometry(0.5, 0.26, 0.62, 3, 0.08), pod);
-    inletShoulder.position.set(x, 0.38, 0.28);
-    group.add(inletShoulder);
-    const midPod = mesh(new RoundedBoxGeometry(0.42, 0.2, 0.72, 3, 0.07), pod);
-    midPod.position.set(x * 0.96, 0.34, -0.28);
-    group.add(midPod);
-    const coke = mesh(new RoundedBoxGeometry(0.28, 0.16, 0.58, 2, 0.06), pod);
-    coke.position.set(x * 0.62, 0.32, -0.88);
-    group.add(coke);
-    const undercut = mesh(new RoundedBoxGeometry(0.34, 0.1, 1.22, 2, 0.04), pod);
-    undercut.position.set(x * 0.88, 0.23, -0.22);
-    group.add(undercut);
-    const inlet = mesh(new RoundedBoxGeometry(0.24, 0.14, 0.18, 2, 0.03), dark);
-    inlet.position.set(x, 0.46, 0.58);
-    group.add(inlet);
-    for (let i = 0; i < 4; i++) {
-      const gill = mesh(new THREE.BoxGeometry(0.2, 0.018, 0.07), dark);
-      gill.position.set(x * 1.16, 0.4, -0.18 - i * 0.12);
-      group.add(gill);
-    }
-    const barge = mesh(new THREE.BoxGeometry(0.05, 0.2, 0.52), dark);
-    barge.position.set(x * 0.7, 0.28, 0.86);
-    group.add(barge);
-    const bargeFoot = mesh(new THREE.BoxGeometry(0.1, 0.02, 0.48), dark);
-    bargeFoot.position.set(x * 0.7, 0.17, 0.86);
-    group.add(bargeFoot);
-    const stalk = mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.22, 6), dark);
-    stalk.rotation.z = x < 0 ? 0.95 : -0.95;
-    stalk.position.set(x * 0.42, 0.64, 0.54);
-    group.add(stalk);
-    const mirror = mesh(new RoundedBoxGeometry(0.12, 0.055, 0.08, 1, 0.016), dark);
-    mirror.position.set(x * 0.52, 0.74, 0.54);
-    group.add(mirror);
-    const glassPad = mesh(new THREE.BoxGeometry(0.08, 0.04, 0.02), dark);
-    glassPad.position.set(x * 0.58, 0.74, 0.54);
-    group.add(glassPad);
+  // Two continuous sidepods with a short black inlet, undercut shadow line, and
+  // one restrained shoulder highlight each. Their narrowing tails meet the engine cover.
+  for (const side of [-1, 1]) {
+    const sidepod = loft([
+      [0.82, side * 0.56, 0.37, 0.12, 0.14],
+      [0.57, side * 0.58, 0.39, 0.21, 0.19],
+      [0.16, side * 0.58, 0.4, 0.22, 0.19],
+      [-0.38, side * 0.53, 0.37, 0.2, 0.18],
+      [-0.82, side * 0.46, 0.35, 0.15, 0.15],
+      [-1.16, side * 0.39, 0.34, 0.09, 0.11],
+    ], pod, 14);
+    group.add(sidepod);
+    const intake = mesh(new THREE.CircleGeometry(0.115, 16), dark);
+    intake.rotation.y = Math.PI / 2 * side;
+    intake.position.set(side * 0.79, 0.43, 0.47);
+    group.add(intake);
+    const podLine = mesh(new THREE.BoxGeometry(0.025, 0.018, 1.12), neon);
+    podLine.position.set(side * 0.67, 0.54, -0.1);
+    group.add(podLine);
   }
 
-  const cover = mesh(new RoundedBoxGeometry(0.42, 0.22, 1.05, 2, 0.06), pod);
-  cover.position.set(0, 0.6, -0.38);
-  group.add(cover);
-  const cokeSpine = mesh(new RoundedBoxGeometry(0.26, 0.16, 0.58, 2, 0.05), pod);
-  cokeSpine.position.set(0, 0.52, -0.96);
-  group.add(cokeSpine);
-
-  const airbox = mesh(new RoundedBoxGeometry(0.28, 0.28, 0.4, 2, 0.05), pod);
-  airbox.position.set(0, 0.86, -0.26);
-  group.add(airbox);
-  const scoop = mesh(new THREE.BoxGeometry(0.22, 0.07, 0.22), dark);
-  scoop.position.set(0, 1.02, -0.2);
-  group.add(scoop);
-  const tcam = mesh(new THREE.BoxGeometry(0.055, 0.045, 0.14), dark);
-  tcam.position.set(0, 1.08, -0.16);
-  group.add(tcam);
-  const tcamStripe = mesh(new THREE.BoxGeometry(0.02, 0.012, 0.15), neon);
-  tcamStripe.position.set(0, 1.105, -0.16);
-  group.add(tcamStripe);
-  const team = mesh(new THREE.BoxGeometry(0.08, 0.05, 0.22), neon);
-  team.position.set(0, 0.94, -0.08);
-  group.add(team);
-
-  const cockpit = mesh(new RoundedBoxGeometry(0.48, 0.14, 0.58, 2, 0.04), dark);
-  cockpit.position.set(0, 0.58, 0.28);
+  // Central cockpit, driver helmet and halo remain legible above the body shell.
+  const cockpitRim = mesh(new RoundedBoxGeometry(0.66, 0.18, 0.72, 3, 0.06), dark);
+  cockpitRim.position.set(0, 0.56, 0.28);
+  group.add(cockpitRim);
+  const cockpit = mesh(new RoundedBoxGeometry(0.5, 0.135, 0.55, 3, 0.05), mat("cockpitInset", {
+    color: 0x070b10, roughness: 0.62, metalness: 0.16,
+  }));
+  cockpit.position.set(0, 0.635, 0.28);
   group.add(cockpit);
-
-  const helmet = mesh(new THREE.SphereGeometry(0.13, 16, 14), helmetMat);
-  helmet.position.set(0, 0.68, 0.22);
+  const helmet = mesh(new THREE.SphereGeometry(0.17, 18, 14), helmetMat);
+  helmet.position.set(0, 0.755, 0.22);
   group.add(helmet);
-  const visor = mesh(new THREE.SphereGeometry(0.135, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), glass());
-  visor.position.set(0, 0.72, 0.26);
+  const visor = mesh(new THREE.SphereGeometry(0.171, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.46), glass());
+  visor.position.set(0, 0.78, 0.3);
   group.add(visor);
+  haloBar(group, [
+    new THREE.Vector3(-0.39, 0.64, -0.04), new THREE.Vector3(-0.37, 0.88, 0.04),
+    new THREE.Vector3(-0.27, 1.02, 0.28), new THREE.Vector3(0, 1.06, 0.38),
+    new THREE.Vector3(0.27, 1.02, 0.28), new THREE.Vector3(0.37, 0.88, 0.04),
+    new THREE.Vector3(0.39, 0.64, -0.04),
+  ], dark, 0.043);
+  haloBar(group, [new THREE.Vector3(0, 0.62, 0.06), new THREE.Vector3(0, 0.82, 0.2), new THREE.Vector3(0, 1.03, 0.36)], dark, 0.036);
+  const airbox = mesh(new RoundedBoxGeometry(0.26, 0.22, 0.34, 2, 0.05), pod);
+  airbox.position.set(0, 0.68, -0.42);
+  group.add(airbox);
+  const airboxOpening = mesh(new RoundedBoxGeometry(0.13, 0.08, 0.035, 1, 0.012), dark);
+  airboxOpening.position.set(0, 0.77, -0.235);
+  group.add(airboxOpening);
 
-  const halo = mesh(new THREE.TorusGeometry(0.3, 0.042, 10, 24, Math.PI), dark);
-  halo.rotation.x = Math.PI / 2;
-  halo.position.set(0, 0.82, 0.36);
-  group.add(halo);
-  const stay = mesh(new THREE.CylinderGeometry(0.028, 0.03, 0.3, 8), dark);
-  stay.position.set(0, 0.9, 0.1);
-  group.add(stay);
-  const stayCap = mesh(new THREE.BoxGeometry(0.08, 0.04, 0.06), dark);
-  stayCap.position.set(0, 1.04, 0.12);
-  group.add(stayCap);
-
-  const strip = mesh(new THREE.BoxGeometry(0.05, 0.022, 2.4), neon);
-  strip.position.set(0, 0.56, 0.1);
-  group.add(strip);
-
-  const frontWing = mesh(new THREE.BoxGeometry(1.8, 0.032, 0.38), coat);
-  frontWing.position.set(0, 0.185, 2.48);
-  frontWing.rotation.x = -0.1;
+  const splitter = mesh(new THREE.BoxGeometry(1.64, 0.035, 0.26), dark);
+  splitter.position.set(0, 0.16, 2.31);
+  group.add(splitter);
+  const frontWing = mesh(new RoundedBoxGeometry(1.72, 0.055, 0.27, 2, 0.025), coat);
+  frontWing.position.set(0, 0.21, 2.36);
   group.add(frontWing);
-  const flap = mesh(new THREE.BoxGeometry(1.62, 0.024, 0.15), coat);
-  flap.position.set(0, 0.255, 2.38);
-  flap.rotation.x = -0.2;
-  group.add(flap);
-  const flap2 = mesh(new THREE.BoxGeometry(1.48, 0.02, 0.11), coat);
-  flap2.position.set(0, 0.305, 2.3);
-  flap2.rotation.x = -0.28;
-  group.add(flap2);
-  const flap3 = mesh(new THREE.BoxGeometry(1.32, 0.016, 0.08), coat);
-  flap3.position.set(0, 0.345, 2.24);
-  flap3.rotation.x = -0.34;
-  group.add(flap3);
-  const neutral = mesh(new THREE.BoxGeometry(0.46, 0.022, 0.34), dark);
-  neutral.position.set(0, 0.2, 2.48);
-  group.add(neutral);
-  for (const x of [-0.9, 0.9]) {
-    const endplate = mesh(new THREE.BoxGeometry(0.045, 0.42, 0.46), dark);
-    endplate.position.set(x, 0.3, 2.46);
+  const frontFlap = mesh(new RoundedBoxGeometry(1.52, 0.035, 0.11, 2, 0.016), pod);
+  frontFlap.position.set(0, 0.27, 2.26);
+  group.add(frontFlap);
+  for (const side of [-1, 1]) {
+    const endplate = mesh(new RoundedBoxGeometry(0.035, 0.28, 0.3, 1, 0.01), dark);
+    endplate.position.set(side * 0.83, 0.29, 2.34);
     group.add(endplate);
-    const foot = mesh(new THREE.BoxGeometry(0.14, 0.022, 0.42), dark);
-    foot.position.set(x, 0.11, 2.46);
-    group.add(foot);
-    const pin = mesh(new THREE.BoxGeometry(0.012, 0.3, 0.4), neon);
-    pin.position.set(x + (x < 0 ? -0.03 : 0.03), 0.3, 2.46);
-    group.add(pin);
-    for (let i = 0; i < 3; i++) {
-      const strake = mesh(new THREE.BoxGeometry(0.09, 0.012, 0.3), dark);
-      strake.position.set(x + (x < 0 ? 0.07 : -0.07), 0.14 + i * 0.045, 2.44);
-      group.add(strake);
-    }
   }
 
-  const rearMain = mesh(new THREE.BoxGeometry(1.72, 0.048, 0.36), coat);
-  rearMain.position.set(0, 1.06, -1.5);
-  rearMain.rotation.x = 0.08;
-  group.add(rearMain);
-  const rearFlap = mesh(new THREE.BoxGeometry(1.55, 0.034, 0.16), pod);
-  rearFlap.position.set(0, 1.15, -1.4);
-  rearFlap.rotation.x = 0.12;
+  // A broad, painted, cambered mainplane and separate flap stay legible at chase
+  // distance. Endplates add a clear frame but stay below the tire diameter.
+  for (const side of [-1, 1]) {
+    const pylon = mesh(new RoundedBoxGeometry(0.065, 0.43, 0.085, 1, 0.02), dark);
+    pylon.position.set(side * 0.34, 0.71, -1.48);
+    pylon.rotation.z = side * -0.08;
+    group.add(pylon);
+  }
+  const rearWing = wingPlane(1.88, 0.3, 0.13, coat);
+  rearWing.position.set(0, 0.97, -1.52);
+  group.add(rearWing);
+  const rearFlap = wingPlane(1.54, 0.17, 0.08, coat);
+  rearFlap.position.set(0, 1.13, -1.39);
   group.add(rearFlap);
-  const drs = mesh(new THREE.BoxGeometry(0.16, 0.055, 0.09), dark);
-  drs.position.set(0, 1.12, -1.44);
-  group.add(drs);
-  const drsArm = mesh(new THREE.BoxGeometry(0.04, 0.08, 0.04), dark);
-  drsArm.position.set(0, 1.18, -1.42);
-  group.add(drsArm);
-  for (const x of [-0.88, 0.88]) {
-    const endplate = mesh(new THREE.BoxGeometry(0.048, 0.62, 0.46), dark);
-    endplate.position.set(x, 0.92, -1.48);
+  for (const side of [-1, 1]) {
+    const plateHeight = variant === "volt" ? 0.53 : variant === "nyx" ? 0.4 : 0.48;
+    const endplate = mesh(new RoundedBoxGeometry(0.045, plateHeight, 0.24, 2, 0.016), variant === "apex" ? pod : dark);
+    endplate.position.set(side * 0.91, 0.91, -1.52);
+    endplate.rotation.z = variant === "volt" ? side * 0.12 : 0;
     group.add(endplate);
-    const pin = mesh(new THREE.BoxGeometry(0.012, 0.46, 0.4), neon);
-    pin.position.set(x + (x < 0 ? -0.032 : 0.032), 0.96, -1.48);
-    group.add(pin);
+    const stripe = mesh(new THREE.BoxGeometry(0.018, plateHeight * 0.72, 0.014), neon);
+    stripe.position.set(side * 0.938, 0.91, -1.392);
+    group.add(stripe);
   }
-  const pylon = mesh(new THREE.BoxGeometry(0.2, 0.58, 0.07), dark);
-  pylon.position.set(0, 0.72, -1.36);
-  group.add(pylon);
-  const beam = mesh(new THREE.BoxGeometry(1.42, 0.028, 0.14), dark);
-  beam.position.set(0, 0.5, -1.54);
-  group.add(beam);
 
-  const diffuser = mesh(new RoundedBoxGeometry(1.28, 0.16, 0.32, 2, 0.03), dark);
-  diffuser.position.set(0, 0.2, -1.62);
+  const tailLamp = mesh(new THREE.BoxGeometry(0.12, 0.05, 0.04), rainMat);
+  tailLamp.position.set(0, 0.43, -1.8);
+  group.add(tailLamp);
+  const diffuser = mesh(new RoundedBoxGeometry(1.04, 0.12, 0.25, 2, 0.025), dark);
+  diffuser.position.set(0, 0.2, -1.65);
   group.add(diffuser);
-  for (const x of [-0.48, -0.24, 0, 0.24, 0.48]) {
-    const strake = mesh(new THREE.BoxGeometry(0.022, 0.14, 0.28), dark);
-    strake.position.set(x, 0.2, -1.62);
-    group.add(strake);
-  }
-  const exhaust = mesh(
-    new THREE.CylinderGeometry(0.038, 0.044, 0.14, 12),
-    mat("exhaust", { color: 0x6a6e72, metalness: 0.92, roughness: 0.22 }),
-  );
-  exhaust.rotation.x = Math.PI / 2;
-  exhaust.position.set(0, 0.42, -1.58);
-  group.add(exhaust);
 
-  const rain = mesh(new THREE.BoxGeometry(0.14, 0.07, 0.055), rainMat);
-  rain.position.set(0, 0.66, -1.55);
-  group.add(rain);
-
-  for (const x of [-0.15, 0.15]) {
-    const lamp = mesh(new THREE.BoxGeometry(0.09, 0.05, 0.05), headlamp());
-    lamp.position.set(x, 0.34, 2.2);
-    group.add(lamp);
-  }
-  addHeadlights(group, 0.34, 2.15, 0.16);
+  addPlayerVariant(group, variant, coat, pod, neon);
 
   if (typeof opts?.number === "number") {
     const decal = numberDecal(opts.number);
@@ -574,13 +506,92 @@ export function createFormulaCar(
   wishbone(group, 0.34, 0.32, 1.12, 0.72, 0.28, 1.38);
   wishbone(group, -0.32, 0.48, 1.08, -0.7, 0.38, 1.38);
   wishbone(group, 0.32, 0.48, 1.08, 0.7, 0.38, 1.38);
-  wishbone(group, -0.36, 0.34, -0.82, -0.78, 0.32, -1.18);
-  wishbone(group, 0.36, 0.34, -0.82, 0.78, 0.32, -1.18);
-  wishbone(group, -0.34, 0.5, -0.78, -0.76, 0.42, -1.18);
-  wishbone(group, 0.34, 0.5, -0.78, 0.76, 0.42, -1.18);
+  wishbone(group, -0.4, 0.3, -0.82, -0.81, 0.32, -1.18);
+  wishbone(group, 0.4, 0.3, -0.82, 0.81, 0.32, -1.18);
+  wishbone(group, -0.39, 0.51, -0.78, -0.8, 0.43, -1.18);
+  wishbone(group, 0.39, 0.51, -0.78, 0.8, 0.43, -1.18);
 
   enableCarShadows(group);
   return group;
+}
+
+/** Small, silhouette-led differences keep the five chassis distinct in chase view. */
+function addPlayerVariant(
+  group: THREE.Group,
+  variant: CarId,
+  coat: THREE.Material,
+  pod: THREE.Material,
+  neon: THREE.Material,
+) {
+  if (variant === "apex") return;
+
+  if (variant === "drift") {
+    const dark = carbon();
+    const upperWing = wingPlane(1.64, 0.15, 0.075, coat);
+    upperWing.position.set(0, 1.32, -1.45);
+    group.add(upperWing);
+    for (const side of [-1, 1]) {
+      const support = mesh(new RoundedBoxGeometry(0.035, 0.25, 0.055, 1, 0.012), dark);
+      support.position.set(side * 0.34, 1.22, -1.47);
+      group.add(support);
+    }
+    return;
+  }
+
+  if (variant === "surge") {
+    // A centered shark fin rises above the rear flap so the profile reads from behind.
+    const finShape = new THREE.Shape();
+    finShape.moveTo(-0.18, 0);
+    finShape.lineTo(0.18, 0);
+    finShape.lineTo(0.13, 0.84);
+    finShape.lineTo(0.055, 1.14);
+    finShape.lineTo(-0.055, 1.14);
+    finShape.lineTo(-0.13, 0.84);
+    finShape.closePath();
+    const fin = mesh(new THREE.ShapeGeometry(finShape, 1), neon);
+    fin.position.set(0, 0.38, -1.32);
+    (fin.material as THREE.Material).side = THREE.DoubleSide;
+    group.add(fin);
+    return;
+  }
+
+  if (variant === "volt") {
+    // Raised end uprights and small horizontal tips create a visible two-level wing.
+    for (const side of [-1, 1]) {
+      const upright = mesh(new RoundedBoxGeometry(0.065, 0.44, 0.09, 2, 0.018), pod);
+      upright.position.set(side * 0.74, 1.28, -1.48);
+      upright.rotation.z = side * 0.08;
+      group.add(upright);
+      const winglet = wingPlane(0.38, 0.24, 0.075, coat);
+      winglet.position.set(side * 0.75, 1.51, -1.48);
+      winglet.rotation.z = side * -0.06;
+      group.add(winglet);
+    }
+    return;
+  }
+
+  if (variant === "nyx") {
+    // The smoke canopy is paired with a transverse roll hoop visible above the rear wing.
+    const canopyMat = new THREE.MeshPhysicalMaterial({
+      color: 0x234257,
+      metalness: 0.32,
+      roughness: 0.16,
+      transparent: true,
+      opacity: 0.82,
+      clearcoat: 1,
+      clearcoatRoughness: 0.08,
+      envMapIntensity: 1.5,
+    });
+    const canopy = mesh(new THREE.SphereGeometry(1, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), canopyMat);
+    canopy.scale.set(0.42, 0.45, 0.46);
+    canopy.position.set(0, 0.8, 0.22);
+    group.add(canopy);
+    const canopyRim = mesh(new THREE.TorusGeometry(0.34, 0.024, 7, 20), neon);
+    canopyRim.scale.set(1.15, 0.78, 1);
+    canopyRim.rotation.x = Math.PI / 2;
+    canopyRim.position.set(0, 0.84, 0.22);
+    group.add(canopyRim);
+  }
 }
 
 function extrudeBody(points: Array<[number, number]>, width: number) {
@@ -866,10 +877,10 @@ function addQuadExhaust(group: THREE.Group, z = -2.06) {
   }
 }
 
-const GT_PAINT = [0x1a222c, 0x2a1618, 0x152018, 0x3a3e46, 0xc5cad1, 0x1a2436, 0x2a2418, 0x241c28];
-const GT_STRIPE = [0x8a929a, 0x8a6a3a, 0x6a8a78, 0x1a1c20, 0x2a3038, 0xb89640, 0x5a4030, 0x7a6878];
-const SUPPORT_PAINT = [0x1a222c, 0x22282e, 0x161c24];
-const SAFETY_PAINT = [0xc9a227, 0xd4b03a, 0xb89220];
+const GT_PAINT = [0x2b7782, 0x9a493b, 0x557859, 0x65738b, 0xc5cad1, 0x405f85, 0x8b7149, 0x86506f];
+const GT_STRIPE = [0x8de5db, 0xf3b36e, 0xd8e29a, 0x334a63, 0x8fc8e8, 0xf0ce72, 0xcaa77c, 0xe8a8d0];
+const SUPPORT_PAINT = [0x263945, 0x344149, 0x33483d];
+const SAFETY_PAINT = [0xd18a32, 0xe0a33c, 0xc67d29];
 let gtTint = 0;
 let supportTint = 0;
 let safetyTint = 0;
@@ -1026,6 +1037,16 @@ function makeSafety() {
   group.add(hull);
   addSedanVolumes(group, body, glassMat, -0.1);
   addBodywork(group, 0.96, -0.1, body);
+  // A short estate roof and rear lip distinguish the safety wagon from GT traffic at a glance.
+  const estateRoof = mesh(new RoundedBoxGeometry(1.2, 0.055, 1.72, 2, 0.035), body);
+  estateRoof.position.set(0, 1.225, -0.14);
+  group.add(estateRoof);
+  const roofRib = mesh(new THREE.BoxGeometry(0.035, 0.018, 1.38), carbon());
+  roofRib.position.set(0, 1.26, -0.14);
+  group.add(roofRib);
+  const rearLip = mesh(new RoundedBoxGeometry(1.5, 0.045, 0.22, 1, 0.02), body);
+  rearLip.position.set(0, 0.87, -1.95);
+  group.add(rearLip);
   const belt = mesh(new THREE.BoxGeometry(1.72, 0.035, 0.07), carbon());
   belt.position.set(0, 0.54, 0.02);
   group.add(belt);
@@ -1033,7 +1054,7 @@ function makeSafety() {
     new THREE.BoxGeometry(1.1, 0.09, 0.22),
     mat("safetyBar", { color: 0xc49218, emissive: 0xd4a017, emissiveIntensity: 0.18 }),
   );
-  lightbar.position.set(0, 1.28, -0.02);
+  lightbar.position.set(0, 1.34, -0.02);
   group.add(lightbar);
   addTrafficLamps(group, 2.1, 0.46, 0.54);
   addTrafficTails(group, -2.1, 0.5, 1.44);

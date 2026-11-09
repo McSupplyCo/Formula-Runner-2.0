@@ -38,6 +38,7 @@ import { emptyRun } from "../src/game/state";
 import { BLOOM, CAMERA, CARS, CHASSIS, DRIVE, MAX_PART_RANK, ROAD } from "../src/game/tuning";
 import { WORLDS } from "../src/game/circuits";
 import { CITY_BEHIND, CITY_SPAN, recycleCityZ } from "../src/game/world";
+import { keyboardSteer, pointerSteer } from "../src/game/input";
 
 describe("camera feel tuning", () => {
   it("keeps chase camera contract names", () => {
@@ -59,6 +60,14 @@ describe("drive feel", () => {
     expect(DRIVE.highSpeedSteerLoss).toBeLessThan(0.4);
     expect(DRIVE.visualYawMax).toBeLessThan(0.12);
     expect("yawPerSteer" in DRIVE).toBe(false);
+  });
+
+  it("maps left and right controls to the matching side of the chase view", () => {
+    expect(keyboardSteer(true, false)).toBe(1);
+    expect(keyboardSteer(false, true)).toBe(-1);
+    expect(keyboardSteer(true, true)).toBe(0);
+    expect(pointerSteer(400, 520, 120)).toBe(-1);
+    expect(pointerSteer(400, 280, 120)).toBe(1);
   });
 });
 
@@ -100,7 +109,7 @@ describe("scoring", () => {
 
 describe("save migration", () => {
   it("creates defaults from empty data", () => {
-    expect(migrateSave(null).version).toBe(4);
+    expect(migrateSave(null).version).toBe(5);
     expect(migrateSave({}).selectedCar).toBe("apex");
     expect(migrateSave({}).credits).toBe(0);
     expect(migrateSave({}).ownedCars).toEqual(["apex"]);
@@ -109,7 +118,7 @@ describe("save migration", () => {
   it("keeps a v1 best distance", () => {
     const next = migrateSave({ bestDistance: 1400, version: 1 });
     expect(next.bestDistance).toBe(1400);
-    expect(next.version).toBe(4);
+    expect(next.version).toBe(5);
     expect(next.ownedCars).toEqual(["apex"]);
   });
 
@@ -361,6 +370,17 @@ describe("traffic patterns", () => {
 
   it("skips a spawn when every lane ahead is already taken", () => {
     expect(pickFairPattern(800, () => 0, [0, 1, 2, 3])).toBeNull();
+  });
+
+  it("skips a spawn when every pattern's opening lane conflicts with nearby traffic", () => {
+    const allOpenings = new Set(PATTERNS.filter((pattern) => pattern.minDistance <= 800)
+      .flatMap((pattern) => openLanes(pattern)));
+    expect(allOpenings.size).toBeGreaterThan(0);
+    expect(pickFairPattern(800, () => 0, allOpenings)).toBeNull();
+  });
+
+  it("rejects a pack when a later member would overlap existing traffic", () => {
+    expect(pickFairPattern(800, () => 0, [], [{ lane: 3, z: 128 }], 100)).toBeNull();
   });
 
   it("keeps every early pattern at distance 0", () => {

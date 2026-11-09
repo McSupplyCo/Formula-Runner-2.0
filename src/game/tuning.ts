@@ -28,9 +28,10 @@ export const ROAD = {
 
 export const CARS = [
   {
-    id: "apex",
-    name: "Apex",
-    blurb: "Balanced race trim. Learn the night here.",
+    id: "sixties",
+    name: "Cinder ’68",
+    era: "1960s · exposed-wheel",
+    blurb: "A narrow monocoque and open cockpit from the first winged era.",
     unlockBest: 0,
     unlockCost: 0,
     topSpeed: 248,
@@ -38,13 +39,14 @@ export const CARS = [
     brake: 78,
     steer: 22,
     grip: 14,
-    color: 0x00e5ff,
-    accent: 0xff006e,
+    color: 0xe7dfc9,
+    accent: 0xc4452d,
   },
   {
-    id: "drift",
-    name: "Drift",
-    blurb: "Snappier steering. Slightly lower top end.",
+    id: "seventies",
+    name: "Groundline ’78",
+    era: "1970s · ground-effect",
+    blurb: "Wide venturi sidepods, planted grip, and a long low floor.",
     unlockBest: 900,
     unlockCost: 800,
     topSpeed: 228,
@@ -52,13 +54,14 @@ export const CARS = [
     brake: 86,
     steer: 30,
     grip: 18,
-    color: 0x39ff14,
-    accent: 0xffd600,
+    color: 0xd8d0b5,
+    accent: 0xb84c32,
   },
   {
-    id: "surge",
-    name: "Surge",
-    blurb: "Highest speed. Demands earlier decisions.",
+    id: "eighties",
+    name: "Turbo ’86",
+    era: "1980s · turbo power",
+    blurb: "Broad bodywork and turbo-era punch trade agility for speed.",
     unlockBest: 2200,
     unlockCost: 2500,
     topSpeed: 286,
@@ -66,13 +69,14 @@ export const CARS = [
     brake: 70,
     steer: 17,
     grip: 11,
-    color: 0xff006e,
-    accent: 0x00e5ff,
+    color: 0xd9d7ce,
+    accent: 0x245b85,
   },
   {
-    id: "volt",
-    name: "Volt",
-    blurb: "Gold-stripe all-rounder. Unlocks late.",
+    id: "nineties",
+    name: "Highline ’90",
+    era: "1990s · raised-nose aero",
+    blurb: "Raised nose, narrow inlet, and a clean high-speed balance.",
     unlockBest: 3200,
     unlockCost: 2800,
     topSpeed: 262,
@@ -80,13 +84,14 @@ export const CARS = [
     brake: 80,
     steer: 24,
     grip: 15,
-    color: 0xffd600,
-    accent: 0x00e5ff,
+    color: 0xd1d5d4,
+    accent: 0xb33332,
   },
   {
-    id: "nyx",
-    name: "Nyx",
-    blurb: "Heavy brakes. Holds a lane when the night gets loud.",
+    id: "modern",
+    name: "Venturi ’22",
+    era: "2020s · ground-effect",
+    blurb: "Halo protection, broad underfloor, and modern low-profile tires.",
     unlockBest: 4500,
     unlockCost: 3400,
     topSpeed: 236,
@@ -94,8 +99,8 @@ export const CARS = [
     brake: 92,
     steer: 26,
     grip: 20,
-    color: 0x7a5cff,
-    accent: 0xff2bd6,
+    color: 0xdce0de,
+    accent: 0x25624e,
   },
 ] as const;
 
@@ -209,6 +214,6 @@ export const ADS = {
 
 export const MAX_PART_RANK = 12;
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 6;
 export const SAVE_KEY = "formula-runner-2";
 export const SAVE_BACKUP_KEY = "formula-runner-2-bak";
